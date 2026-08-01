@@ -94,7 +94,7 @@ const Dashboard = () => {
           <h2 className="text-2xl font-semibold text-gray-900">Your Documents</h2>
           <button
             onClick={createDoc}
-            className="flex items-center bg-primary hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg shadow-md transition-all"
+            className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg shadow-md transition-all"
           >
             <Plus size={20} className="mr-2" /> New Document
           </button>
