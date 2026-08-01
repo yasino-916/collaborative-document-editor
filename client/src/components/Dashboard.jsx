@@ -74,10 +74,10 @@ const Dashboard = () => {
           <div>
             <h3 className="font-semibold text-gray-900 line-clamp-1">{doc.title}</h3>
             <p className="text-xs text-gray-500 mt-1">
-              Created: {format(new Date(doc.createdAt || doc.updatedAt), 'MMM d, yyyy')}
+              Created: {format(new Date(doc.createdAt || doc.updatedAt), 'MMM d, yyyy h:mm a')}
             </p>
             <p className="text-xs text-gray-500">
-              Modified: {format(new Date(doc.updatedAt), 'MMM d, yyyy')}
+              Modified: {format(new Date(doc.updatedAt), 'MMM d, yyyy h:mm a')}
             </p>
           </div>
         </div>
