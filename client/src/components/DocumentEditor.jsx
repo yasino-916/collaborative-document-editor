@@ -142,7 +142,11 @@ const DocumentEditor = () => {
       setShareEmail('');
       setShowShare(false);
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to share');
+      let errorMsg = err.response?.data?.error || 'Failed to share';
+      if (errorMsg === 'User not found') {
+        errorMsg = 'User not found! They must create an account on SyncWrite first before you can share with them.';
+      }
+      alert(errorMsg);
     }
   };
 
@@ -211,7 +215,7 @@ const DocumentEditor = () => {
                     value={shareEmail}
                     onChange={e => setShareEmail(e.target.value)}
                   />
-                  <button type="submit" className="w-full bg-primary text-white py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors">
+                  <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors">
                     Send Invite
                   </button>
                 </form>

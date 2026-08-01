@@ -191,6 +191,11 @@ app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
     const userToShare = await User.findOne({ where: { email } });
     if (!userToShare) return res.status(404).json({ error: 'User not found' });
 
+    if (userToShare.id === req.user.id) return res.status(400).json({ error: 'Cannot share with yourself' });
+
+    const existingCollab = await Collaborator.findOne({ where: { documentId: document.id, userId: userToShare.id } });
+    if (existingCollab) return res.status(400).json({ error: 'User is already a collaborator' });
+
     await Collaborator.create({ documentId: document.id, userId: userToShare.id, role });
     res.json({ message: 'Shared successfully' });
   } catch (err) {
