@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { FileText, Plus, LogOut, Trash2 } from 'lucide-react';
+import { FileText, Plus, LogOut, Trash2, Edit2, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 
 const Dashboard = () => {
@@ -43,28 +43,62 @@ const Dashboard = () => {
     }
   };
 
+  const renameDoc = async (doc) => {
+    const newTitle = window.prompt('Enter new title:', doc.title);
+    if (newTitle && newTitle.trim() !== doc.title) {
+      try {
+        await api.put(`/documents/${doc.id}`, { title: newTitle.trim() });
+        fetchDocs();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const duplicateDoc = async (id) => {
+    try {
+      await api.post(`/documents/${id}/duplicate`);
+      fetchDocs();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const renderDocCard = (doc, isOwner) => (
     <div key={doc.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-5">
       <Link to={`/document/${doc.id}`} className="block">
         <div className="flex items-center mb-4">
-          <div className="p-3 bg-indigo-50 text-primary rounded-lg mr-4">
+          <div className="p-3 bg-indigo-50 text-blue-600 rounded-lg mr-4">
             <FileText size={24} />
           </div>
           <div>
             <h3 className="font-semibold text-gray-900 line-clamp-1">{doc.title}</h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Created: {format(new Date(doc.createdAt || doc.updatedAt), 'MMM d, yyyy')}
+            </p>
             <p className="text-xs text-gray-500">
-              Opened {format(new Date(doc.updatedAt), 'MMM d, yyyy')}
+              Modified: {format(new Date(doc.updatedAt), 'MMM d, yyyy')}
             </p>
           </div>
         </div>
       </Link>
       <div className="border-t border-gray-100 pt-3 flex justify-between items-center text-sm text-gray-500">
         <span>By {doc.Owner?.name || 'Unknown'}</span>
-        {isOwner && (
-          <button onClick={() => deleteDoc(doc.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors">
-            <Trash2 size={16} />
+        <div className="flex space-x-1">
+          {isOwner && (
+            <button onClick={() => renameDoc(doc)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors" title="Rename">
+              <Edit2 size={16} />
+            </button>
+          )}
+          <button onClick={() => duplicateDoc(doc.id)} className="text-green-500 hover:bg-green-50 p-1.5 rounded-md transition-colors" title="Duplicate">
+            <Copy size={16} />
           </button>
-        )}
+          {isOwner && (
+            <button onClick={() => deleteDoc(doc.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Delete">
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

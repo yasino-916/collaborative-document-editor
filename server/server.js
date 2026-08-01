@@ -131,6 +131,41 @@ app.get('/api/documents/:id', authMiddleware, async (req, res) => {
   }
 });
 
+app.put('/api/documents/:id', authMiddleware, async (req, res) => {
+  try {
+    const { title } = req.body;
+    const document = await Document.findByPk(req.params.id);
+    if (!document) return res.status(404).json({ error: 'Document not found' });
+    if (document.ownerId !== req.user.id) return res.status(403).json({ error: 'Only owner can rename' });
+
+    document.title = title;
+    await document.save();
+    res.json(document);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/documents/:id/duplicate', authMiddleware, async (req, res) => {
+  try {
+    const document = await Document.findByPk(req.params.id);
+    if (!document) return res.status(404).json({ error: 'Document not found' });
+    
+    const isOwner = document.ownerId === req.user.id;
+    const collab = await Collaborator.findOne({ where: { documentId: document.id, userId: req.user.id } });
+    if (!isOwner && !collab) return res.status(403).json({ error: 'Access denied' });
+
+    const duplicatedDoc = await Document.create({ 
+      title: `${document.title} (Copy)`, 
+      content: document.content,
+      ownerId: req.user.id 
+    });
+    res.json(duplicatedDoc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/documents/:id', authMiddleware, async (req, res) => {
   try {
     const document = await Document.findByPk(req.params.id);
@@ -226,7 +261,7 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3001;
 
-sequelize.sync({ alter: true }).then(() => {
+sequelize.sync().then(() => {
   server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
