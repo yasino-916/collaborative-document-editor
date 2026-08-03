@@ -54,13 +54,14 @@ DocumentVersion.belongsTo(Document, { foreignKey: 'documentId' });
 User.hasMany(DocumentVersion, { foreignKey: 'createdBy' });
 DocumentVersion.belongsTo(User, { as: 'Creator', foreignKey: 'createdBy' });
 
-Document.hasMany(Comment, { foreignKey: 'documentId' });
+Document.hasMany(Comment, { foreignKey: 'documentId', onDelete: 'CASCADE' });
 Comment.belongsTo(Document, { foreignKey: 'documentId' });
 
 User.hasMany(Comment, { foreignKey: 'userId' });
 Comment.belongsTo(User, { as: 'Author', foreignKey: 'userId' });
 
-Comment.hasMany(Comment, { as: 'Replies', foreignKey: 'parentId' });
+Comment.hasMany(Comment, { as: 'Replies', foreignKey: 'parentId', onDelete: 'CASCADE' });
+Comment.belongsTo(Comment, { as: 'Parent', foreignKey: 'parentId' });
 
 module.exports = {
   sequelize,
