@@ -542,6 +542,18 @@ const DocumentEditor = () => {
     }
   };
 
+  const handleReplaceAll = () => {
+    if (!quill || !searchQuery.trim() || (userRole !== 'OWNER' && userRole !== 'EDITOR')) return;
+    const text = quill.getText();
+    const regex = new RegExp(searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const newText = text.replace(regex, replaceQuery);
+    quill.setText(newText);
+    if (socket) socket.emit('save-document', quill.root.innerHTML);
+    setSearchResultsCount(0);
+    setCurrentMatchIndex(0);
+    addNotification('success', 'Replaced all occurrences!');
+  };
+
   // Export to Markdown (.md)
   const handleExportMarkdown = () => {
     if (!quill) return;
@@ -855,9 +867,15 @@ const DocumentEditor = () => {
               />
               <button
                 onClick={handleReplace}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium"
+                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium"
               >
                 Replace
+              </button>
+              <button
+                onClick={handleReplaceAll}
+                className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium"
+              >
+                Replace All
               </button>
             </div>
           )}
@@ -976,6 +994,19 @@ const DocumentEditor = () => {
               {activeUsers.length} Online
             </div>
           </div>
+
+          {/* Search Button */}
+          <button
+            onClick={() => setShowSearch(!showSearch)}
+            className={`p-2 rounded-lg border text-xs font-semibold flex items-center transition-colors ${
+              showSearch 
+                ? 'bg-blue-100 text-blue-700 border-blue-300' 
+                : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+            title="Search & Replace in Document (Ctrl+F)"
+          >
+            <Search size={15} className="mr-1 text-blue-500" /> Search
+          </button>
 
           {/* Dark Mode Toggle */}
           <button
