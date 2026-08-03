@@ -28,7 +28,8 @@ const Collaborator = sequelize.define('Collaborator', {
 
 const DocumentVersion = sequelize.define('DocumentVersion', {
   id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-  content: { type: DataTypes.TEXT, allowNull: false }
+  content: { type: DataTypes.TEXT, allowNull: false },
+  versionName: { type: DataTypes.STRING, defaultValue: 'Snapshot' }
 });
 
 const Comment = sequelize.define('Comment', {
@@ -51,7 +52,7 @@ Document.hasMany(DocumentVersion, { foreignKey: 'documentId' });
 DocumentVersion.belongsTo(Document, { foreignKey: 'documentId' });
 
 User.hasMany(DocumentVersion, { foreignKey: 'createdBy' });
-DocumentVersion.belongsTo(User, { foreignKey: 'createdBy' });
+DocumentVersion.belongsTo(User, { as: 'Creator', foreignKey: 'createdBy' });
 
 Document.hasMany(Comment, { foreignKey: 'documentId' });
 Comment.belongsTo(Document, { foreignKey: 'documentId' });
