@@ -37,6 +37,25 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+// Helper to determine user role for a document
+const getDocRole = async (documentId, userId) => {
+  const document = await Document.findByPk(documentId, {
+    include: [{ model: User, as: 'Owner', attributes: ['id', 'name', 'email'] }]
+  });
+  if (!document) return { document: null, role: null };
+  
+  if (document.ownerId === userId) {
+    return { document, role: 'OWNER' };
+  }
+
+  const collab = await Collaborator.findOne({ where: { documentId, userId } });
+  if (collab) {
+    return { document, role: collab.role };
+  }
+
+  return { document, role: null }; // Unauthorized
+};
+
 // Auth Routes
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -101,7 +120,7 @@ app.get('/api/documents', authMiddleware, async (req, res) => {
 app.post('/api/documents', authMiddleware, async (req, res) => {
   try {
     const { title } = req.body;
-    const document = await Document.create({ title, ownerId: req.user.id });
+    const document = await Document.create({ title: title || 'Untitled Document', ownerId: req.user.id });
     res.json(document);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -110,22 +129,17 @@ app.post('/api/documents', authMiddleware, async (req, res) => {
 
 app.get('/api/documents/:id', authMiddleware, async (req, res) => {
   try {
-    const document = await Document.findByPk(req.params.id, {
+    const { document, role } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !role) return res.status(403).json({ error: 'Access denied' });
+
+    const fullDoc = await Document.findByPk(req.params.id, {
       include: [
-        { model: User, as: 'Owner', attributes: ['id', 'name'] },
+        { model: User, as: 'Owner', attributes: ['id', 'name', 'email'] },
         { model: Collaborator, include: [{ model: User, attributes: ['id', 'name', 'email'] }] }
       ]
     });
 
-    if (!document) return res.status(404).json({ error: 'Document not found' });
-
-    // Check permissions
-    const isOwner = document.ownerId === req.user.id;
-    const collab = document.Collaborators.find(c => c.userId === req.user.id);
-    
-    if (!isOwner && !collab) return res.status(403).json({ error: 'Access denied' });
-
-    res.json({ document, role: isOwner ? 'OWNER' : collab.role });
+    res.json({ document: fullDoc, role });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -134,9 +148,10 @@ app.get('/api/documents/:id', authMiddleware, async (req, res) => {
 app.put('/api/documents/:id', authMiddleware, async (req, res) => {
   try {
     const { title } = req.body;
-    const document = await Document.findByPk(req.params.id);
-    if (!document) return res.status(404).json({ error: 'Document not found' });
-    if (document.ownerId !== req.user.id) return res.status(403).json({ error: 'Only owner can rename' });
+    const { document, role } = await getDocRole(req.params.id, req.user.id);
+    if (!document || (role !== 'OWNER' && role !== 'EDITOR')) {
+      return res.status(403).json({ error: 'Access denied. Only owner or editor can rename' });
+    }
 
     document.title = title;
     await document.save();
@@ -148,12 +163,8 @@ app.put('/api/documents/:id', authMiddleware, async (req, res) => {
 
 app.post('/api/documents/:id/duplicate', authMiddleware, async (req, res) => {
   try {
-    const document = await Document.findByPk(req.params.id);
-    if (!document) return res.status(404).json({ error: 'Document not found' });
-    
-    const isOwner = document.ownerId === req.user.id;
-    const collab = await Collaborator.findOne({ where: { documentId: document.id, userId: req.user.id } });
-    if (!isOwner && !collab) return res.status(403).json({ error: 'Access denied' });
+    const { document, role } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !role) return res.status(403).json({ error: 'Access denied' });
 
     const duplicatedDoc = await Document.create({ 
       title: `${document.title} (Copy)`, 
@@ -168,9 +179,8 @@ app.post('/api/documents/:id/duplicate', authMiddleware, async (req, res) => {
 
 app.delete('/api/documents/:id', authMiddleware, async (req, res) => {
   try {
-    const document = await Document.findByPk(req.params.id);
-    if (!document) return res.status(404).json({ error: 'Document not found' });
-    if (document.ownerId !== req.user.id) return res.status(403).json({ error: 'Only owner can delete' });
+    const { document, role } = await getDocRole(req.params.id, req.user.id);
+    if (!document || role !== 'OWNER') return res.status(403).json({ error: 'Only owner can delete document' });
 
     await document.destroy();
     res.json({ message: 'Deleted' });
@@ -179,25 +189,168 @@ app.delete('/api/documents/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Sharing & Collaborators Management
 app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
   try {
     const { email, role } = req.body;
-    const document = await Document.findByPk(req.params.id);
-    if (!document) return res.status(404).json({ error: 'Document not found' });
-    
-    // Only owner or EDITOR can share? Let's say only owner for simplicity
-    if (document.ownerId !== req.user.id) return res.status(403).json({ error: 'Access denied' });
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || (userRole !== 'OWNER' && userRole !== 'EDITOR')) {
+      return res.status(403).json({ error: 'Access denied. Only owner or editor can share.' });
+    }
+
+    const validRoles = ['VIEWER', 'COMMENTER', 'EDITOR'];
+    const targetRole = validRoles.includes(role) ? role : 'VIEWER';
 
     const userToShare = await User.findOne({ where: { email } });
     if (!userToShare) return res.status(404).json({ error: 'User not found' });
+    if (userToShare.id === document.ownerId) return res.status(400).json({ error: 'Cannot share with document owner' });
 
-    if (userToShare.id === req.user.id) return res.status(400).json({ error: 'Cannot share with yourself' });
+    let collab = await Collaborator.findOne({ where: { documentId: document.id, userId: userToShare.id } });
+    if (collab) {
+      collab.role = targetRole;
+      await collab.save();
+      return res.json({ message: `Updated ${userToShare.name} permissions to ${targetRole}`, collab });
+    }
 
-    const existingCollab = await Collaborator.findOne({ where: { documentId: document.id, userId: userToShare.id } });
-    if (existingCollab) return res.status(400).json({ error: 'User is already a collaborator' });
+    collab = await Collaborator.create({ documentId: document.id, userId: userToShare.id, role: targetRole });
+    res.json({ message: `Shared successfully with ${userToShare.name} as ${targetRole}`, collab });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    await Collaborator.create({ documentId: document.id, userId: userToShare.id, role });
-    res.json({ message: 'Shared successfully' });
+app.get('/api/documents/:id/collaborators', authMiddleware, async (req, res) => {
+  try {
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !userRole) return res.status(403).json({ error: 'Access denied' });
+
+    const collabs = await Collaborator.findAll({
+      where: { documentId: req.params.id },
+      include: [{ model: User, attributes: ['id', 'name', 'email'] }]
+    });
+
+    res.json({ owner: document.Owner, collaborators: collabs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/documents/:id/collaborators/:userId', authMiddleware, async (req, res) => {
+  try {
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || userRole !== 'OWNER') return res.status(403).json({ error: 'Only owner can remove collaborators' });
+
+    await Collaborator.destroy({ where: { documentId: req.params.id, userId: req.params.userId } });
+    res.json({ message: 'Collaborator removed' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Comments API Routes
+app.get('/api/documents/:id/comments', authMiddleware, async (req, res) => {
+  try {
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !userRole) return res.status(403).json({ error: 'Access denied' });
+
+    const comments = await Comment.findAll({
+      where: { documentId: req.params.id, parentId: null },
+      include: [
+        { model: User, as: 'Author', attributes: ['id', 'name', 'email'] },
+        {
+          model: Comment,
+          as: 'Replies',
+          include: [{ model: User, as: 'Author', attributes: ['id', 'name', 'email'] }],
+          order: [['createdAt', 'ASC']]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json(comments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/documents/:id/comments', authMiddleware, async (req, res) => {
+  try {
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !userRole) return res.status(403).json({ error: 'Access denied' });
+    
+    if (userRole === 'VIEWER') {
+      return res.status(403).json({ error: 'Viewers are not permitted to add or reply to comments' });
+    }
+
+    const { content, parentId } = req.body;
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Comment content cannot be empty' });
+
+    const comment = await Comment.create({
+      documentId: document.id,
+      userId: req.user.id,
+      content: content.trim(),
+      parentId: parentId || null
+    });
+
+    const fullComment = await Comment.findByPk(comment.id, {
+      include: [
+        { model: User, as: 'Author', attributes: ['id', 'name', 'email'] },
+        {
+          model: Comment,
+          as: 'Replies',
+          include: [{ model: User, as: 'Author', attributes: ['id', 'name', 'email'] }]
+        }
+      ]
+    });
+
+    io.to(document.id).emit('comment-added', fullComment);
+
+    res.json(fullComment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/documents/:id/comments/:commentId/resolve', authMiddleware, async (req, res) => {
+  try {
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !userRole) return res.status(403).json({ error: 'Access denied' });
+    if (userRole === 'VIEWER') return res.status(403).json({ error: 'Viewers cannot resolve comments' });
+
+    const comment = await Comment.findByPk(req.params.commentId);
+    if (!comment || comment.documentId !== document.id) return res.status(404).json({ error: 'Comment not found' });
+
+    comment.resolved = !comment.resolved;
+    await comment.save();
+
+    io.to(document.id).emit('comment-resolved', { commentId: comment.id, resolved: comment.resolved });
+
+    res.json(comment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/documents/:id/comments/:commentId', authMiddleware, async (req, res) => {
+  try {
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !userRole) return res.status(403).json({ error: 'Access denied' });
+
+    const comment = await Comment.findByPk(req.params.commentId);
+    if (!comment || comment.documentId !== document.id) return res.status(404).json({ error: 'Comment not found' });
+
+    const isCommentAuthor = comment.userId === req.user.id;
+    const isDocOwner = document.ownerId === req.user.id;
+
+    if (!isCommentAuthor && !isDocOwner) {
+      return res.status(403).json({ error: 'You can only delete your own comments' });
+    }
+
+    await comment.destroy();
+
+    io.to(document.id).emit('comment-deleted', { commentId: req.params.commentId });
+
+    res.json({ message: 'Comment deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -206,12 +359,8 @@ app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
 // Version History Routes
 app.get('/api/documents/:id/versions', authMiddleware, async (req, res) => {
   try {
-    const document = await Document.findByPk(req.params.id);
-    if (!document) return res.status(404).json({ error: 'Document not found' });
-
-    const isOwner = document.ownerId === req.user.id;
-    const collab = await Collaborator.findOne({ where: { documentId: document.id, userId: req.user.id } });
-    if (!isOwner && !collab) return res.status(403).json({ error: 'Access denied' });
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !userRole) return res.status(403).json({ error: 'Access denied' });
 
     const versions = await DocumentVersion.findAll({
       where: { documentId: req.params.id },
@@ -228,12 +377,10 @@ app.get('/api/documents/:id/versions', authMiddleware, async (req, res) => {
 app.post('/api/documents/:id/versions', authMiddleware, async (req, res) => {
   try {
     const { versionName, content } = req.body;
-    const document = await Document.findByPk(req.params.id);
-    if (!document) return res.status(404).json({ error: 'Document not found' });
-
-    const isOwner = document.ownerId === req.user.id;
-    const collab = await Collaborator.findOne({ where: { documentId: document.id, userId: req.user.id } });
-    if (!isOwner && !collab) return res.status(403).json({ error: 'Access denied' });
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || (userRole !== 'OWNER' && userRole !== 'EDITOR')) {
+      return res.status(403).json({ error: 'Access denied. Viewers and commenters cannot create version snapshots.' });
+    }
 
     const versionContent = content !== undefined ? content : document.content;
 
@@ -258,19 +405,16 @@ app.post('/api/documents/:id/versions', authMiddleware, async (req, res) => {
 
 app.post('/api/documents/:id/versions/:versionId/restore', authMiddleware, async (req, res) => {
   try {
-    const document = await Document.findByPk(req.params.id);
-    if (!document) return res.status(404).json({ error: 'Document not found' });
-
-    const isOwner = document.ownerId === req.user.id;
-    const collab = await Collaborator.findOne({ where: { documentId: document.id, userId: req.user.id } });
-    if (!isOwner && !collab) return res.status(403).json({ error: 'Access denied' });
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || (userRole !== 'OWNER' && userRole !== 'EDITOR')) {
+      return res.status(403).json({ error: 'Access denied. Only owner or editors can restore versions.' });
+    }
 
     const versionToRestore = await DocumentVersion.findByPk(req.params.versionId);
     if (!versionToRestore || versionToRestore.documentId !== document.id) {
       return res.status(404).json({ error: 'Version not found' });
     }
 
-    // Snapshot current before restore
     await DocumentVersion.create({
       documentId: document.id,
       content: document.content,
@@ -305,7 +449,7 @@ app.post('/api/documents/:id/versions/:versionId/restore', authMiddleware, async
 });
 
 // Real-time Collaboration with Socket.IO
-const activeUsers = new Map(); // docId -> Map(socketId -> { userId, name, color, status, activeLocation, cursor })
+const activeUsers = new Map(); // docId -> Map(socketId -> { userId, name, color, status, activeLocation, cursor, role })
 const lastVersionSaved = new Map();
 
 const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#14B8A6'];
@@ -317,12 +461,14 @@ io.on('connection', (socket) => {
       const user = await User.findByPk(decoded.userId);
       if (!user) return;
 
-      socket.join(documentId);
-      
-      const document = await Document.findByPk(documentId);
-      if (!document) return;
+      const { document, role } = await getDocRole(documentId, user.id);
+      if (!document || !role) {
+        socket.emit('unauthorized', 'Access denied');
+        return;
+      }
 
-      socket.emit('load-document', document.content);
+      socket.join(documentId);
+      socket.emit('load-document', { content: document.content, role });
 
       // Create initial version if none exist
       const existingVersionCount = await DocumentVersion.count({ where: { documentId } });
@@ -345,6 +491,7 @@ io.on('connection', (socket) => {
         name: user.name,
         email: user.email,
         color,
+        role,
         status: 'online',
         activeLocation: 'Viewing document',
         cursor: null,
@@ -355,6 +502,8 @@ io.on('connection', (socket) => {
       io.to(documentId).emit('active-users', usersInRoom);
 
       socket.on('send-changes', (delta) => {
+        // Enforce role: Only OWNER or EDITOR can send document edits!
+        if (role !== 'OWNER' && role !== 'EDITOR') return;
         socket.broadcast.to(documentId).emit('receive-changes', delta);
       });
 
@@ -363,7 +512,7 @@ io.on('connection', (socket) => {
         if (room && room.has(socket.id)) {
           const userState = room.get(socket.id);
           userState.cursor = data.range;
-          userState.activeLocation = data.activeLocation || 'Editing document';
+          userState.activeLocation = data.activeLocation || 'Viewing document';
           userState.status = 'active';
         }
 
@@ -381,6 +530,9 @@ io.on('connection', (socket) => {
       });
 
       socket.on('save-document', async (data) => {
+        // Enforce role: Only OWNER or EDITOR can save document content!
+        if (role !== 'OWNER' && role !== 'EDITOR') return;
+
         await Document.update({ content: data }, { where: { id: documentId } });
 
         const now = Date.now();
