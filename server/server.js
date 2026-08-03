@@ -529,6 +529,15 @@ io.on('connection', (socket) => {
         }
       });
 
+      socket.on('typing', () => {
+        if (role !== 'OWNER' && role !== 'EDITOR') return;
+        socket.broadcast.to(documentId).emit('user-typing', { id: user.id, name: user.name });
+      });
+
+      socket.on('stop-typing', () => {
+        socket.broadcast.to(documentId).emit('user-stopped-typing', { id: user.id });
+      });
+
       socket.on('save-document', async (data) => {
         // Enforce role: Only OWNER or EDITOR can save document content!
         if (role !== 'OWNER' && role !== 'EDITOR') return;
