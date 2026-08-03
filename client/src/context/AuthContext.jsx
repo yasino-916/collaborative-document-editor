@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext();
@@ -10,19 +10,30 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
-  const api = axios.create({
-    baseURL: 'http://localhost:3001/api',
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const api = useMemo(() => {
+    const client = axios.create({
+      baseURL: 'http://localhost:3001/api'
+    });
+
+    client.interceptors.request.use((config) => {
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
+        config.headers.Authorization = `Bearer ${storedToken}`;
+      } else {
+        delete config.headers.Authorization;
+      }
+      return config;
+    });
+
+    return client;
+  }, []);
 
   useEffect(() => {
     if (token) {
       localStorage.setItem('token', token);
-      api.defaults.headers.Authorization = `Bearer ${token}`;
       fetchUser();
     } else {
       localStorage.removeItem('token');
-      delete api.defaults.headers.Authorization;
       setUser(null);
       setLoading(false);
     }
@@ -33,7 +44,9 @@ export const AuthProvider = ({ children }) => {
       const res = await api.get('/auth/me');
       setUser(res.data.user);
     } catch (err) {
+      localStorage.removeItem('token');
       setToken(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -41,17 +54,26 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
-    setToken(res.data.token);
-    setUser(res.data.user);
+    if (res.data?.token) {
+      setToken(res.data.token);
+      setUser(res.data.user);
+      localStorage.setItem('token', res.data.token);
+    }
+    return res.data;
   };
 
   const register = async (name, email, password) => {
     const res = await api.post('/auth/register', { name, email, password });
-    setToken(res.data.token);
-    setUser(res.data.user);
+    if (res.data?.token) {
+      setToken(res.data.token);
+      setUser(res.data.user);
+      localStorage.setItem('token', res.data.token);
+    }
+    return res.data;
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
     setToken(null);
     setUser(null);
   };
