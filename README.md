@@ -2,6 +2,23 @@
 
 SyncWrite is a robust, real-time collaborative document editor designed to demonstrate high-quality software engineering practices, clean architecture, and dynamic capabilities.
 
+## Quick Start
+
+```bash
+# Backend
+cd server && npm install && npm start
+
+# Frontend (new terminal)
+cd client && npm install --legacy-peer-deps && npm run dev
+
+# Open: http://localhost:5173
+```
+
+## Documentation
+- 📖 [Database Schema](DATABASE_SCHEMA.md) - Complete database structure and relationships
+- 🔌 [API Documentation](API_DOCUMENTATION.md) - REST endpoints and WebSocket events
+- ✅ [Submission Checklist](SUBMISSION_CHECKLIST.md) - Project verification and submission guide
+
 ## Features Included
 - **User Authentication**: Secure JWT-based registration and login system with bcrypt password hashing and Google OAuth support.
 - **Real-Time Collaboration**: Instant synchronization of text using WebSockets (Socket.IO).
@@ -27,11 +44,12 @@ SyncWrite is a robust, real-time collaborative document editor designed to demon
 
 ## Getting Started
 
-### 1. Prerequisites
-- Node.js (v18 or higher recommended)
-- npm
+### Prerequisites
+- **Node.js** v18 or higher
+- **npm** (comes with Node.js)
+- **Modern browser** (Chrome, Firefox, Safari, or Edge)
 
-### 2. Backend Setup
+### Backend Setup (Terminal 1)
 1. Navigate to the server directory:
    ```bash
    cd server
@@ -44,11 +62,11 @@ SyncWrite is a robust, real-time collaborative document editor designed to demon
    ```bash
    npm start
    ```
-   *The server will start on port 3001 and automatically create a local `database.sqlite` file.*
+   *✅ Server will start on port 3001 and automatically create `database.sqlite` file.*
    
-   **Note**: On first PDF export, Puppeteer will download Chrome (~170MB, one-time only). This may take 2-3 minutes but only happens once.
+   **⚠️ Note**: First PDF export downloads Chrome (~170MB, one-time only).
 
-### 3. Frontend Setup
+### Frontend Setup (Terminal 2)
 1. Navigate to the client directory:
    ```bash
    cd client
@@ -61,7 +79,7 @@ SyncWrite is a robust, real-time collaborative document editor designed to demon
    ```bash
    npm run dev
    ```
-   *The app will be accessible at http://localhost:5173*
+   *✅ App accessible at http://localhost:5173*
 
 ## Demo Walkthrough
 1. **Register**: Create a new account (or use Google OAuth).
@@ -142,30 +160,60 @@ SyncWrite is a robust, real-time collaborative document editor designed to demon
 
 ## Technology Stack
 
-### Frontend
-- React 19.2.8
-- Vite 8.2.0 (Build tool)
-- Tailwind CSS 4.3.3
-- Quill 2.0.3 (Rich text editor)
-- Socket.IO Client 4.8.3
-- React Router 7.18.2
-- Axios (HTTP client)
-- date-fns (Date formatting)
-- Lucide React (Icons)
+### Frontend Technologies
+- **React** 19.2.8 - UI framework
+- **Vite** 8.2.0 - Build tool & dev server
+- **Tailwind CSS** 4.3.3 - Styling
+- **Quill** 2.0.3 - Rich text editor
+- **Socket.IO Client** 4.8.3 - Real-time communication
+- **React Router** 7.18.2 - Client-side routing
+- **Axios** - HTTP requests
+- **date-fns** - Date formatting
+- **Lucide React** - Icon library
+- **pptxgenjs** - PowerPoint export
+- **mammoth** - DOCX import
 
-### Backend
-- Node.js + Express 5.2.1
-- Socket.IO 4.8.3 (Real-time)
-- Sequelize 6.37.8 (ORM)
-- SQLite3 6.0.1 (Database)
-- Puppeteer (PDF generation)
-- docx (DOCX generation)
-- bcryptjs 3.0.3 (Password hashing)
-- jsonwebtoken 9.0.3 (JWT auth)
+### Backend Technologies
+- **Node.js** + **Express** 5.2.1 - Server framework
+- **Socket.IO** 4.8.3 - Real-time WebSocket server
+- **Sequelize** 6.37.8 - ORM for database operations
+- **SQLite3** 6.0.1 - Development database
+- **Puppeteer** - Professional PDF generation
+- **docx** - True DOCX file generation
+- **bcryptjs** 3.0.3 - Password hashing
+- **jsonwebtoken** 9.0.3 - JWT authentication
+- **htmlparser2** - HTML parsing for exports
 
 ### Development Tools
-- ESLint (oxlint)
-- Prettier (code formatting)
-- Git (version control)
+- **oxlint** - Fast JavaScript linter
+- **Git** - Version control
+
+---
+
+## Project Structure
+
+```
+Insa_challenge3/
+├── client/                     # Frontend React application
+│   ├── src/
+│   │   ├── components/        # React components
+│   │   ├── context/           # Context API (Auth)
+│   │   ├── assets/            # Images and static files
+│   │   └── App.jsx            # Main app component
+│   └── package.json
+│
+├── server/                     # Backend Node.js application
+│   ├── server.js              # Main server file
+│   ├── db.js                  # Database models
+│   ├── exportService.js       # PDF/DOCX export service
+│   └── package.json
+│
+├── README.md                   # This file
+├── API_DOCUMENTATION.md        # API reference
+├── DATABASE_SCHEMA.md          # Database structure
+└── SUBMISSION_CHECKLIST.md     # Submission guide
+```
+
+---
 
 *Built for the Insa Challenge.*
