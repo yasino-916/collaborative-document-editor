@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import {
   FileText, Plus, LogOut, Trash2, Edit2, Copy, Menu, X,
   Users, Clock, Star, Settings, HelpCircle, FolderOpen, HardDrive,
@@ -16,6 +17,7 @@ const Dashboard = () => {
   const [activeView, setActiveView] = useState('docs');
   const navigate = useNavigate();
   const profileMenuRef = useRef(null);
+  const socketRef = useRef(null);
 
   // Settings state
   const [editingName, setEditingName] = useState(false);
@@ -28,6 +30,7 @@ const Dashboard = () => {
 
   // Profile dropdown state
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [notification, setNotification] = useState(null);
 
   // Change password modal state
   const [showChangePassword, setShowChangePassword] = useState(false);
