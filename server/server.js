@@ -508,6 +508,47 @@ app.post('/api/documents/:id/versions/:versionId/restore', authMiddleware, async
   }
 });
 
+// Export Routes (PDF and DOCX)
+const { generatePDF, generateDOCX } = require('./exportService');
+
+app.post('/api/documents/:id/export/pdf', authMiddleware, async (req, res) => {
+  try {
+    const { document, role } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !role) return res.status(403).json({ error: 'Access denied' });
+
+    const { content } = req.body;
+    const htmlContent = content || document.content;
+    
+    const pdfBuffer = await generatePDF(htmlContent, document.title);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${document.title || 'document'}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error('PDF Export Error:', err);
+    res.status(500).json({ error: 'Failed to generate PDF: ' + err.message });
+  }
+});
+
+app.post('/api/documents/:id/export/docx', authMiddleware, async (req, res) => {
+  try {
+    const { document, role } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !role) return res.status(403).json({ error: 'Access denied' });
+
+    const { content } = req.body;
+    const htmlContent = content || document.content;
+    
+    const docxBuffer = await generateDOCX(htmlContent, document.title);
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${document.title || 'document'}.docx"`);
+    res.send(docxBuffer);
+  } catch (err) {
+    console.error('DOCX Export Error:', err);
+    res.status(500).json({ error: 'Failed to generate DOCX: ' + err.message });
+  }
+});
+
 // Real-time Collaboration with Socket.IO
 const activeUsers = new Map(); // docId -> Map(socketId -> { userId, name, color, status, activeLocation, cursor, role })
 const lastVersionSaved = new Map();
