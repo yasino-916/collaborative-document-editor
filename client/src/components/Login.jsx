@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { Lock, Mail, AlertCircle, FileText, ShieldAlert } from 'lucide-react';
+import { useGoogleLogin } from '@react-oauth/google';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -14,8 +15,24 @@ const Login = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [suspiciousActivity, setSuspiciousActivity] = useState(false);
   
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  const handleGoogleSuccess = async (tokenResponse) => {
+    try {
+      setLoading(true);
+      await loginWithGoogle(tokenResponse.access_token);
+      navigate('/');
+    } catch (err) {
+      setError('Google Sign-In failed. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: handleGoogleSuccess,
+    onError: () => setError('Google Sign-In was unsuccessful.')
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -140,8 +157,10 @@ const Login = () => {
 
           <div className="mt-6">
             <button
-              onClick={() => alert("Google Sign-In initiated.")}
-              className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 rounded-xl shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              onClick={() => googleLogin()}
+              type="button"
+              disabled={loading || isLocked}
+              className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 rounded-xl shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                 <path

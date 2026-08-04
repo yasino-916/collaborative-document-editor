@@ -89,6 +89,40 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    // Using access_token to get user info from Google
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch user info from Google');
+    }
+    
+    const payload = await response.json();
+    
+    let user = await User.findOne({ where: { email: payload.email } });
+    if (!user) {
+      // Create user if they don't exist
+      const hashedPassword = await bcrypt.hash(Math.random().toString(36).slice(-8) + 'Aa1!', 10);
+      user = await User.create({
+        name: payload.name,
+        email: payload.email,
+        password: hashedPassword
+      });
+    }
+
+    const jwtToken = jwt.sign({ userId: user.id }, JWT_SECRET);
+    res.json({ token: jwtToken, user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    console.error('Google Auth Error:', err);
+    res.status(401).json({ error: 'Invalid Google Token' });
+  }
+});
+
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   res.json({ user: { id: req.user.id, name: req.user.name, email: req.user.email } });
 });

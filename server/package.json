@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "google-auth-library": "^11.0.0",
     "sequelize": "^6.37.8",
     "sqlite3": "^6.0.1"
   }
