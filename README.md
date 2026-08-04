@@ -17,7 +17,6 @@ cd client && npm install --legacy-peer-deps && npm run dev
 ## Documentation
 - 📖 [Database Schema](DATABASE_SCHEMA.md) - Complete database structure and relationships
 - 🔌 [API Documentation](API_DOCUMENTATION.md) - REST endpoints and WebSocket events
-- ✅ [Submission Checklist](SUBMISSION_CHECKLIST.md) - Project verification and submission guide
 
 ## Features Included
 - **User Authentication**: Secure JWT-based registration and login system with bcrypt password hashing and Google OAuth support.
