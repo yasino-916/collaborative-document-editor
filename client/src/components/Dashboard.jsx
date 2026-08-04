@@ -32,6 +32,14 @@ const Dashboard = () => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notification, setNotification] = useState(null);
 
+  // Edit profile modal state
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editProfileName, setEditProfileName] = useState('');
+  const [editProfileEmail, setEditProfileEmail] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState(false);
+
   // Change password modal state
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -299,6 +307,38 @@ const Dashboard = () => {
     alert('Storage management feature coming soon!\n\nCurrent usage: 2.4 GB of 15 GB (16%)');
   };
 
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setProfileError('');
+    setProfileSuccess(false);
+
+    if (!editProfileName.trim()) {
+      setProfileError('Name cannot be empty.');
+      return;
+    }
+    if (!editProfileEmail.trim() || !editProfileEmail.includes('@')) {
+      setProfileError('Please enter a valid email address.');
+      return;
+    }
+
+    setProfileSaving(true);
+    try {
+      await api.put('/auth/profile', {
+        name: editProfileName.trim(),
+        email: editProfileEmail.trim(),
+      });
+      setProfileSuccess(true);
+      setTimeout(() => {
+        setShowEditProfile(false);
+        setProfileSuccess(false);
+      }, 1500);
+    } catch (err) {
+      setProfileError(err.response?.data?.error || 'Failed to update profile. Please try again.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   const renderDocCard = (doc, isOwner) => {
     const title = doc.title.toLowerCase();
     const isSheet = title.includes('spreadsheet') || 
@@ -552,7 +592,11 @@ const Dashboard = () => {
                       <button
                         onClick={() => {
                           setShowProfileMenu(false);
-                          setActiveView('settings');
+                          setEditProfileName(user?.name || '');
+                          setEditProfileEmail(user?.email || '');
+                          setProfileError('');
+                          setProfileSuccess(false);
+                          setShowEditProfile(true);
                         }}
                         className="w-full flex items-center px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
@@ -1426,6 +1470,91 @@ const Dashboard = () => {
           )}
         </main>
       </div>
+
+      {/* ── Edit Profile Modal ── */}
+      {showEditProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                  {user?.name?.charAt(0).toUpperCase()}
+                </div>
+                <h2 className="text-lg font-semibold text-gray-900">Edit Profile</h2>
+              </div>
+              <button
+                onClick={() => setShowEditProfile(false)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleSaveProfile} className="px-6 py-5 space-y-4">
+              {/* Success */}
+              {profileSuccess && (
+                <div className="flex items-center space-x-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">
+                  <Check size={16} className="flex-shrink-0" />
+                  <span>Profile updated successfully!</span>
+                </div>
+              )}
+
+              {/* Error */}
+              {profileError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 rounded-lg px-4 py-3 text-sm">
+                  {profileError}
+                </div>
+              )}
+
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Name</label>
+                <input
+                  type="text"
+                  value={editProfileName}
+                  onChange={e => setEditProfileName(e.target.value)}
+                  required
+                  placeholder="Enter your name"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={editProfileEmail}
+                  onChange={e => setEditProfileEmail(e.target.value)}
+                  required
+                  placeholder="Enter your email"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditProfile(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={profileSaving || profileSuccess}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {profileSaving ? 'Saving...' : profileSuccess ? 'Saved!' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── Change Password Modal ── */}
       {showChangePassword && (
