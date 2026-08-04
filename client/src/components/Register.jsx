@@ -32,9 +32,19 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!passwordRegex.test(password)) {
-      setError('Password must be at least 8 characters long and include an uppercase letter, lowercase letter, number, and special character.');
+    // Validate password strength
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialChar) {
+      setError('Password must include uppercase, lowercase, number, and special character (!@#$%^&*).');
       return;
     }
 
@@ -122,6 +132,9 @@ const Register = () => {
                 onChange={e => setPassword(e.target.value)}
               />
             </div>
+            <p className="mt-2 text-xs text-gray-500">
+              Must be at least 8 characters with uppercase, lowercase, number, and special character
+            </p>
           </div>
 
           <button

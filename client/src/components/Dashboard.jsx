@@ -16,9 +16,23 @@ const Dashboard = () => {
   const [activeView, setActiveView] = useState('docs');
   const navigate = useNavigate();
 
+  // Settings state
+  const [editingName, setEditingName] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const [emailValue, setEmailValue] = useState('');
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [desktopNotifications, setDesktopNotifications] = useState(false);
+  const [autoSave, setAutoSave] = useState(true);
+
   useEffect(() => {
     fetchDocs();
-  }, []);
+    // Initialize settings values from user
+    if (user) {
+      setNameValue(user.name || '');
+      setEmailValue(user.email || '');
+    }
+  }, [user]);
 
   const fetchDocs = async () => {
     try {
@@ -68,6 +82,120 @@ const Dashboard = () => {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  // Settings functions
+  const updateName = async () => {
+    if (!nameValue.trim()) {
+      alert('Name cannot be empty');
+      setNameValue(user.name);
+      setEditingName(false);
+      return;
+    }
+    try {
+      await api.put('/auth/profile', { name: nameValue });
+      setEditingName(false);
+      alert('Name updated successfully');
+      // Update user context would happen here if you have a context update function
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update name');
+      setNameValue(user.name);
+    }
+  };
+
+  const updateEmail = async () => {
+    if (!emailValue.trim() || !emailValue.includes('@')) {
+      alert('Please enter a valid email');
+      setEmailValue(user.email);
+      setEditingEmail(false);
+      return;
+    }
+    try {
+      await api.put('/auth/profile', { email: emailValue });
+      setEditingEmail(false);
+      alert('Email updated successfully. Please verify your new email.');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update email');
+      setEmailValue(user.email);
+    }
+  };
+
+  const handleChangePassword = () => {
+    const newPassword = window.prompt('Enter new password:\n\nRequirements:\n- Minimum 8 characters\n- At least one uppercase letter\n- At least one lowercase letter\n- At least one number\n- At least one special character (!@#$%^&*)');
+    if (!newPassword) return;
+    
+    // Validate password strength
+    if (newPassword.length < 8) {
+      alert('Password must be at least 8 characters long');
+      return;
+    }
+    
+    const hasUpperCase = /[A-Z]/.test(newPassword);
+    const hasLowerCase = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
+    
+    if (!hasUpperCase) {
+      alert('Password must contain at least one uppercase letter');
+      return;
+    }
+    if (!hasLowerCase) {
+      alert('Password must contain at least one lowercase letter');
+      return;
+    }
+    if (!hasNumber) {
+      alert('Password must contain at least one number');
+      return;
+    }
+    if (!hasSpecialChar) {
+      alert('Password must contain at least one special character (!@#$%^&*)');
+      return;
+    }
+    
+    const confirmPassword = window.prompt('Confirm new password:');
+    if (newPassword !== confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+    
+    api.put('/auth/change-password', { newPassword })
+      .then(() => {
+        alert('Password changed successfully! Please log in again with your new password.');
+      })
+      .catch(err => {
+        console.error(err);
+        alert(err.response?.data?.error || 'Failed to change password');
+      });
+  };
+
+  const handleDeleteAccount = () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete your account? This action cannot be undone.\n\n' +
+      'All your documents will be permanently deleted.'
+    );
+    if (!confirmed) return;
+    
+    const finalConfirm = window.prompt('Type "DELETE" to confirm account deletion:');
+    if (finalConfirm !== 'DELETE') {
+      alert('Account deletion cancelled');
+      return;
+    }
+
+    api.delete('/auth/account')
+      .then(() => {
+        alert('Account deleted successfully');
+        logout();
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Failed to delete account');
+      });
+  };
+
+  const handleManageStorage = () => {
+    alert('Storage management feature coming soon!\n\nCurrent usage: 2.4 GB of 15 GB (16%)');
   };
 
   const renderDocCard = (doc, isOwner) => (
@@ -744,87 +872,175 @@ const Dashboard = () => {
 
           {/* Settings View */}
           {activeView === 'settings' && (
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-3xl">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-xl font-semibold text-gray-900">Account Settings</h3>
-                  <p className="text-sm text-gray-500 mt-1">Manage your account preferences and settings</p>
+                {/* Profile Section */}
+                <div className="p-8 border-b border-gray-200">
+                  <div className="mb-6">
+                    <label className="block text-sm text-gray-600 mb-2">Name</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={editingName ? nameValue : user.name} 
+                        onChange={(e) => setNameValue(e.target.value)}
+                        disabled={!editingName}
+                        className={`flex-1 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          editingName ? 'bg-white' : 'bg-gray-50'
+                        }`}
+                      />
+                      {editingName ? (
+                        <>
+                          <button
+                            onClick={updateName}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingName(false);
+                              setNameValue(user.name);
+                            }}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setEditingName(true)}
+                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">Email</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="email" 
+                        value={editingEmail ? emailValue : user.email} 
+                        onChange={(e) => setEmailValue(e.target.value)}
+                        disabled={!editingEmail}
+                        className={`flex-1 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                          editingEmail ? 'bg-white' : 'bg-gray-50'
+                        }`}
+                      />
+                      {editingEmail ? (
+                        <>
+                          <button
+                            onClick={updateEmail}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingEmail(false);
+                              setEmailValue(user.email);
+                            }}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setEditingEmail(true)}
+                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="divide-y divide-gray-200">
-                  {/* Profile Section */}
-                  <div className="p-6">
-                    <h4 className="text-base font-medium text-gray-900 mb-4">Profile Information</h4>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                        <input 
-                          type="text" 
-                          value={user.name} 
-                          disabled 
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                        <input 
-                          type="email" 
-                          value={user.email} 
-                          disabled 
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
-                        />
-                      </div>
+                {/* Preferences */}
+                <div className="p-8 border-b border-gray-200">
+                  <h3 className="text-base font-normal text-gray-900 mb-6">Preferences</h3>
+                  <div className="space-y-4">
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <span className="text-sm text-gray-700">Email notifications</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                        checked={emailNotifications}
+                        onChange={(e) => {
+                          setEmailNotifications(e.target.checked);
+                          // Save preference to localStorage or API
+                          localStorage.setItem('emailNotifications', e.target.checked);
+                        }}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <span className="text-sm text-gray-700">Desktop notifications</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                        checked={desktopNotifications}
+                        onChange={(e) => {
+                          setDesktopNotifications(e.target.checked);
+                          localStorage.setItem('desktopNotifications', e.target.checked);
+                          if (e.target.checked && 'Notification' in window) {
+                            Notification.requestPermission();
+                          }
+                        }}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between cursor-pointer group">
+                      <span className="text-sm text-gray-700">Auto-save documents</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                        checked={autoSave}
+                        onChange={(e) => {
+                          setAutoSave(e.target.checked);
+                          localStorage.setItem('autoSave', e.target.checked);
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Storage */}
+                <div className="p-8 border-b border-gray-200">
+                  <h3 className="text-base font-normal text-gray-900 mb-4">Storage</h3>
+                  <div className="mb-3">
+                    <div className="flex justify-between text-sm text-gray-600 mb-2">
+                      <span>Used: 2.4 GB of 15 GB</span>
+                      <span className="text-gray-500">16% full</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{width: '16%'}}></div>
                     </div>
                   </div>
+                  <button 
+                    onClick={handleManageStorage}
+                    className="text-sm text-blue-600 hover:underline font-normal mt-2"
+                  >
+                    Manage storage
+                  </button>
+                </div>
 
-                  {/* Preferences */}
-                  <div className="p-6">
-                    <h4 className="text-base font-medium text-gray-900 mb-4">Preferences</h4>
-                    <div className="space-y-3">
-                      <label className="flex items-center justify-between cursor-pointer">
-                        <span className="text-sm text-gray-700">Email notifications</span>
-                        <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" defaultChecked />
-                      </label>
-                      <label className="flex items-center justify-between cursor-pointer">
-                        <span className="text-sm text-gray-700">Desktop notifications</span>
-                        <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" />
-                      </label>
-                      <label className="flex items-center justify-between cursor-pointer">
-                        <span className="text-sm text-gray-700">Auto-save documents</span>
-                        <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" defaultChecked />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Storage */}
-                  <div className="p-6">
-                    <h4 className="text-base font-medium text-gray-900 mb-4">Storage</h4>
-                    <div className="mb-3">
-                      <div className="flex justify-between text-sm text-gray-600 mb-2">
-                        <span>Used: 2.4 GB of 15 GB</span>
-                        <span>16% full</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-blue-600 h-2 rounded-full" style={{width: '16%'}}></div>
-                      </div>
-                    </div>
-                    <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                      Manage storage
+                {/* Account Actions */}
+                <div className="p-8">
+                  <h3 className="text-base font-normal text-gray-900 mb-4">Account Actions</h3>
+                  <div className="space-y-3">
+                    <button 
+                      onClick={handleChangePassword}
+                      className="text-sm text-blue-600 hover:underline font-normal block"
+                    >
+                      Change password
                     </button>
-                  </div>
-
-                  {/* Account Actions */}
-                  <div className="p-6">
-                    <h4 className="text-base font-medium text-gray-900 mb-4">Account Actions</h4>
-                    <div className="space-y-3">
-                      <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                        Change password
-                      </button>
-                      <br />
-                      <button className="text-sm text-red-600 hover:text-red-700 font-medium">
-                        Delete account
-                      </button>
-                    </div>
+                    <button 
+                      onClick={handleDeleteAccount}
+                      className="text-sm text-red-600 hover:underline font-normal block"
+                    >
+                      Delete account
+                    </button>
                   </div>
                 </div>
               </div>

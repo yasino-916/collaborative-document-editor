@@ -63,6 +63,22 @@ app.post('/api/auth/register', async (req, res) => {
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) return res.status(400).json({ error: 'Email already in use' });
 
+    // Validate password strength
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+    
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialChar) {
+      return res.status(400).json({ 
+        error: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (!@#$%^&*)' 
+      });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({ name, email, password: hashedPassword });
     
@@ -125,6 +141,89 @@ app.post('/api/auth/google', async (req, res) => {
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   res.json({ user: { id: req.user.id, name: req.user.name, email: req.user.email } });
+});
+
+// Profile update routes
+app.put('/api/auth/profile', authMiddleware, async (req, res) => {
+  try {
+    const { name, email } = req.body;
+    const updates = {};
+    
+    if (name !== undefined) updates.name = name;
+    if (email !== undefined) {
+      // Check if email is already taken by another user
+      const existing = await User.findOne({ where: { email } });
+      if (existing && existing.id !== req.user.id) {
+        return res.status(400).json({ error: 'Email already in use' });
+      }
+      updates.email = email;
+    }
+    
+    await req.user.update(updates);
+    res.json({ 
+      message: 'Profile updated successfully',
+      user: { id: req.user.id, name: req.user.name, email: req.user.email }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    
+    // Validate password length
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+    
+    // Validate password strength
+    const hasUpperCase = /[A-Z]/.test(newPassword);
+    const hasLowerCase = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
+    
+    if (!hasUpperCase) {
+      return res.status(400).json({ error: 'Password must contain at least one uppercase letter' });
+    }
+    if (!hasLowerCase) {
+      return res.status(400).json({ error: 'Password must contain at least one lowercase letter' });
+    }
+    if (!hasNumber) {
+      return res.status(400).json({ error: 'Password must contain at least one number' });
+    }
+    if (!hasSpecialChar) {
+      return res.status(400).json({ error: 'Password must contain at least one special character (!@#$%^&*)' });
+    }
+    
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await req.user.update({ password: hashedPassword });
+    
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/auth/account', authMiddleware, async (req, res) => {
+  try {
+    // Delete all documents owned by user
+    await Document.destroy({ where: { ownerId: req.user.id } });
+    
+    // Delete all collaborations
+    await Collaborator.destroy({ where: { userId: req.user.id } });
+    
+    // Delete all comments
+    await Comment.destroy({ where: { userId: req.user.id } });
+    
+    // Delete user
+    await req.user.destroy();
+    
+    res.json({ message: 'Account deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Document Routes
