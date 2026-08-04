@@ -1,10 +1,13 @@
 const { Sequelize, DataTypes } = require('sequelize');
-const path = require('path');
 
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: path.join(__dirname, 'database.sqlite'),
-  logging: false
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: 'postgres',
+  logging: false,
+  dialectOptions: {
+    ssl: process.env.NODE_ENV === 'production'
+      ? { require: true, rejectUnauthorized: false }
+      : false
+  }
 });
 
 const User = sequelize.define('User', {
