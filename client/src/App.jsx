@@ -6,6 +6,8 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import DocumentEditor from './components/DocumentEditor';
+import SpreadsheetEditor from './components/SpreadsheetEditor';
+import PresentationEditor from './components/PresentationEditor';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -25,6 +27,8 @@ const App = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/document/:id" element={<ProtectedRoute><DocumentEditor /></ProtectedRoute>} />
+          <Route path="/spreadsheet/:id" element={<ProtectedRoute><SpreadsheetEditor /></ProtectedRoute>} />
+          <Route path="/presentation/:id" element={<ProtectedRoute><PresentationEditor /></ProtectedRoute>} />
         </Routes>
       </Router>
       </AuthProvider>

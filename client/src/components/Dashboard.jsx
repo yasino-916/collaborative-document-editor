@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { 
+import {
   FileText, Plus, LogOut, Trash2, Edit2, Copy, Menu, X,
   Users, Clock, Star, Settings, HelpCircle, FolderOpen, HardDrive,
   Sheet, Presentation, Video, ClipboardList
@@ -73,6 +73,23 @@ const Dashboard = () => {
     try {
       const res = await api.post('/documents', { title: 'Untitled Document' });
       navigate(`/document/${res.data.id}`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const createItem = async (title, type = 'doc') => {
+    try {
+      // In a real app we'd have a type field in the DB.
+      // Here we rely on title to render the correct view for the prototype.
+      const res = await api.post('/documents', { title });
+      if (type === 'sheet') {
+        navigate(`/spreadsheet/${res.data.id}`);
+      } else if (type === 'presentation') {
+        navigate(`/presentation/${res.data.id}`);
+      } else {
+        navigate(`/document/${res.data.id}`);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -150,18 +167,18 @@ const Dashboard = () => {
   const handleChangePassword = () => {
     const newPassword = window.prompt('Enter new password:\n\nRequirements:\n- Minimum 8 characters\n- At least one uppercase letter\n- At least one lowercase letter\n- At least one number\n- At least one special character (!@#$%^&*)');
     if (!newPassword) return;
-    
+
     // Validate password strength
     if (newPassword.length < 8) {
       alert('Password must be at least 8 characters long');
       return;
     }
-    
+
     const hasUpperCase = /[A-Z]/.test(newPassword);
     const hasLowerCase = /[a-z]/.test(newPassword);
     const hasNumber = /[0-9]/.test(newPassword);
     const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
-    
+
     if (!hasUpperCase) {
       alert('Password must contain at least one uppercase letter');
       return;
@@ -178,13 +195,13 @@ const Dashboard = () => {
       alert('Password must contain at least one special character (!@#$%^&*)');
       return;
     }
-    
+
     const confirmPassword = window.prompt('Confirm new password:');
     if (newPassword !== confirmPassword) {
       alert('Passwords do not match');
       return;
     }
-    
+
     api.put('/auth/change-password', { newPassword })
       .then(() => {
         alert('Password changed successfully! Please log in again with your new password.');
@@ -201,7 +218,7 @@ const Dashboard = () => {
       'All your documents will be permanently deleted.'
     );
     if (!confirmed) return;
-    
+
     const finalConfirm = window.prompt('Type "DELETE" to confirm account deletion:');
     if (finalConfirm !== 'DELETE') {
       alert('Account deletion cancelled');
@@ -223,12 +240,31 @@ const Dashboard = () => {
     alert('Storage management feature coming soon!\n\nCurrent usage: 2.4 GB of 15 GB (16%)');
   };
 
-  const renderDocCard = (doc, isOwner) => (
+  const renderDocCard = (doc, isOwner) => {
+    const title = doc.title.toLowerCase();
+    const isSheet = title.includes('spreadsheet') || 
+                    title.includes('budget') || 
+                    title.includes('to-do list') || 
+                    title.includes('calendar') || 
+                    title.includes('finance');
+    
+    const isPresentation = title.includes('presentation') || 
+                           title.includes('pitch deck') || 
+                           title.includes('business proposal') || 
+                           title.includes('portfolio') || 
+                           title.includes('education') || 
+                           title.includes('marketing');
+    
+    const docLink = isSheet ? `/spreadsheet/${doc.id}` : isPresentation ? `/presentation/${doc.id}` : `/document/${doc.id}`;
+    const Icon = isSheet ? Sheet : isPresentation ? Presentation : FileText;
+    const iconColorClass = isSheet ? 'text-green-600 bg-green-50' : isPresentation ? 'text-yellow-600 bg-yellow-50' : 'text-blue-600 bg-indigo-50';
+
+    return (
     <div key={doc.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-5">
-      <Link to={`/document/${doc.id}`} className="block">
+      <Link to={docLink} className="block">
         <div className="flex items-center mb-4">
-          <div className="p-3 bg-indigo-50 text-blue-600 rounded-lg mr-4">
-            <FileText size={24} />
+          <div className={`p-3 rounded-lg mr-4 ${iconColorClass}`}>
+            <Icon size={24} />
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
@@ -273,7 +309,8 @@ const Dashboard = () => {
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -315,9 +352,8 @@ const Dashboard = () => {
         <nav className="flex-1 py-6 px-3">
           <button
             onClick={() => setActiveView('docs')}
-            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${
-              activeView === 'docs' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${activeView === 'docs' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <FileText size={22} className="text-blue-500" />
             <span className="text-base font-normal">Docs</span>
@@ -325,9 +361,8 @@ const Dashboard = () => {
 
           <button
             onClick={() => setActiveView('sheets')}
-            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${
-              activeView === 'sheets' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${activeView === 'sheets' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <Sheet size={22} className="text-green-500" />
             <span className="text-base font-normal">Sheets</span>
@@ -335,9 +370,8 @@ const Dashboard = () => {
 
           <button
             onClick={() => setActiveView('slides')}
-            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${
-              activeView === 'slides' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${activeView === 'slides' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <Presentation size={22} className="text-yellow-500" />
             <span className="text-base font-normal">Slides</span>
@@ -345,9 +379,8 @@ const Dashboard = () => {
 
           <button
             onClick={() => setActiveView('vids')}
-            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${
-              activeView === 'vids' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${activeView === 'vids' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <Video size={22} className="text-purple-500" />
             <span className="text-base font-normal">Vids</span>
@@ -355,40 +388,36 @@ const Dashboard = () => {
 
           <button
             onClick={() => setActiveView('forms')}
-            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-6 ${
-              activeView === 'forms' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-6 ${activeView === 'forms' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <ClipboardList size={22} className="text-purple-600" />
             <span className="text-base font-normal">Forms</span>
           </button>
 
           {/* Settings Section */}
-          <button 
+          <button
             onClick={() => setActiveView('settings')}
-            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${
-              activeView === 'settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${activeView === 'settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <Settings size={22} className="text-gray-500" />
             <span className="text-base font-normal">Settings</span>
           </button>
 
-          <button 
+          <button
             onClick={() => setActiveView('help')}
-            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${
-              activeView === 'help' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors mb-1 ${activeView === 'help' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <HelpCircle size={22} className="text-gray-500" />
             <span className="text-base font-normal">Help & Feedback</span>
           </button>
 
-          <button 
+          <button
             onClick={() => setActiveView('drive')}
-            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors ${
-              activeView === 'drive' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg transition-colors ${activeView === 'drive' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+              }`}
           >
             <HardDrive size={22} className="text-blue-500" />
             <span className="text-base font-normal">Drive</span>
@@ -494,11 +523,11 @@ const Dashboard = () => {
                     <span className="ml-1">▼</span>
                   </button>
                 </div>
-                
+
                 {/* Template Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {/* Blank Spreadsheet */}
-                  <button className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all p-6 aspect-[3/4] flex flex-col items-center justify-center group">
+                  <button onClick={() => createItem('Untitled Spreadsheet', 'sheet')} className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all p-6 aspect-[3/4] flex flex-col items-center justify-center group">
                     <div className="w-16 h-16 mb-3 flex items-center justify-center">
                       <div className="relative">
                         <div className="absolute inset-0 bg-gradient-to-br from-red-400 via-yellow-400 to-green-400 opacity-20 rounded"></div>
@@ -509,7 +538,7 @@ const Dashboard = () => {
                   </button>
 
                   {/* To-do list */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('To-do list', 'sheet')} className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-green-50 to-green-100 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2">
                         <div className="space-y-1">
@@ -526,7 +555,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Annual budget */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Annual budget', 'sheet')} className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-orange-50 to-red-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2">
                         <div className="space-y-1">
@@ -543,7 +572,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Monthly budget */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Monthly budget', 'sheet')} className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-blue-50 to-indigo-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 flex items-center justify-center">
                         <div className="flex space-x-1 items-end">
@@ -559,7 +588,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Finance Investment */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Finance Investment', 'sheet')} className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-blue-50 to-blue-100 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2">
                         <div className="space-y-1.5">
@@ -579,7 +608,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Annual Calendar */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Annual Calendar', 'sheet')} className="bg-white rounded-lg border border-gray-200 hover:border-blue-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-teal-50 to-cyan-100 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2">
                         <div className="grid grid-cols-7 gap-0.5">
@@ -613,17 +642,17 @@ const Dashboard = () => {
                     </select>
                     <button className="p-2 hover:bg-gray-100 rounded" title="Grid view">
                       <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                        <rect x="2" y="2" width="6" height="6" rx="1"/>
-                        <rect x="12" y="2" width="6" height="6" rx="1"/>
-                        <rect x="2" y="12" width="6" height="6" rx="1"/>
-                        <rect x="12" y="12" width="6" height="6" rx="1"/>
+                        <rect x="2" y="2" width="6" height="6" rx="1" />
+                        <rect x="12" y="2" width="6" height="6" rx="1" />
+                        <rect x="2" y="12" width="6" height="6" rx="1" />
+                        <rect x="12" y="12" width="6" height="6" rx="1" />
                       </svg>
                     </button>
                     <button className="p-2 hover:bg-gray-100 rounded" title="List view">
                       <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                        <rect x="2" y="3" width="16" height="2" rx="1"/>
-                        <rect x="2" y="9" width="16" height="2" rx="1"/>
-                        <rect x="2" y="15" width="16" height="2" rx="1"/>
+                        <rect x="2" y="3" width="16" height="2" rx="1" />
+                        <rect x="2" y="9" width="16" height="2" rx="1" />
+                        <rect x="2" y="15" width="16" height="2" rx="1" />
                       </svg>
                     </button>
                   </div>
@@ -653,11 +682,11 @@ const Dashboard = () => {
                     <span className="ml-1">▼</span>
                   </button>
                 </div>
-                
+
                 {/* Template Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {/* Blank Presentation */}
-                  <button className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all p-6 aspect-[3/4] flex flex-col items-center justify-center group">
+                  <button onClick={() => createItem('Untitled Presentation', 'presentation')} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all p-6 aspect-[3/4] flex flex-col items-center justify-center group">
                     <div className="w-16 h-16 mb-3 flex items-center justify-center">
                       <Plus size={48} className="text-yellow-600" />
                     </div>
@@ -665,7 +694,7 @@ const Dashboard = () => {
                   </button>
 
                   {/* Pitch Deck */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Pitch Deck', 'presentation')} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-yellow-50 to-orange-100 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 flex flex-col justify-center items-center">
                         <div className="w-8 h-8 bg-yellow-400 rounded-full mb-1"></div>
@@ -678,7 +707,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Business Proposal */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Business Proposal', 'presentation')} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-blue-50 to-purple-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2">
                         <div className="space-y-1">
@@ -694,7 +723,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Portfolio */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Portfolio', 'presentation')} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-pink-50 to-red-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-1 grid grid-cols-2 gap-1">
                         <div className="bg-pink-200 rounded"></div>
@@ -709,7 +738,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Education */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Education', 'presentation')} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-green-50 to-teal-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 flex items-center justify-center">
                         <div className="text-4xl text-green-500">📚</div>
@@ -721,7 +750,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Marketing */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
+                  <div onClick={() => createItem('Marketing', 'presentation')} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-500 transition-all overflow-hidden cursor-pointer group">
                     <div className="aspect-[3/4] bg-gradient-to-br from-purple-50 to-pink-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 flex items-center justify-center">
                         <div className="text-3xl">📊</div>
@@ -766,10 +795,10 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-normal text-gray-700">Start a new video</h3>
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {/* New Recording */}
-                  <button className="bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-purple-500 transition-all p-8 flex flex-col items-center justify-center group">
+                  <button onClick={() => createItem('New Recording')} className="bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-purple-500 transition-all p-8 flex flex-col items-center justify-center group">
                     <div className="w-16 h-16 mb-3 bg-purple-100 rounded-full flex items-center justify-center">
                       <Video size={32} className="text-purple-600" />
                     </div>
@@ -778,7 +807,7 @@ const Dashboard = () => {
                   </button>
 
                   {/* Upload Video */}
-                  <button className="bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-purple-500 transition-all p-8 flex flex-col items-center justify-center group">
+                  <button onClick={() => alert('Video upload functionality coming soon!')} className="bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-purple-500 transition-all p-8 flex flex-col items-center justify-center group">
                     <div className="w-16 h-16 mb-3 bg-purple-100 rounded-full flex items-center justify-center">
                       <Plus size={32} className="text-purple-600" />
                     </div>
@@ -787,7 +816,7 @@ const Dashboard = () => {
                   </button>
 
                   {/* From Drive */}
-                  <button className="bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-purple-500 transition-all p-8 flex flex-col items-center justify-center group">
+                  <button onClick={() => setActiveView('drive')} className="bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-purple-500 transition-all p-8 flex flex-col items-center justify-center group">
                     <div className="w-16 h-16 mb-3 bg-purple-100 rounded-full flex items-center justify-center">
                       <HardDrive size={32} className="text-purple-600" />
                     </div>
@@ -830,10 +859,10 @@ const Dashboard = () => {
                     <span className="ml-1">▼</span>
                   </button>
                 </div>
-                
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {/* Blank Form */}
-                  <button className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all p-6 aspect-[3/4] flex flex-col items-center justify-center group">
+                  <button onClick={() => createItem('Untitled Form')} className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all p-6 aspect-[3/4] flex flex-col items-center justify-center group">
                     <div className="w-16 h-16 mb-3 flex items-center justify-center">
                       <Plus size={48} className="text-purple-600" />
                     </div>
@@ -841,7 +870,7 @@ const Dashboard = () => {
                   </button>
 
                   {/* Contact Form */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
+                  <div onClick={() => createItem('Contact Info')} className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
                     <div className="aspect-[3/4] bg-gradient-to-br from-purple-50 to-pink-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 space-y-1">
                         <div className="h-1.5 bg-purple-400 rounded w-2/3"></div>
@@ -855,7 +884,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Event Registration */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
+                  <div onClick={() => createItem('Event Registration')} className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
                     <div className="aspect-[3/4] bg-gradient-to-br from-blue-50 to-indigo-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 space-y-1">
                         <div className="h-2 bg-blue-500 rounded w-3/4"></div>
@@ -869,7 +898,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Survey */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
+                  <div onClick={() => createItem('Survey')} className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
                     <div className="aspect-[3/4] bg-gradient-to-br from-green-50 to-teal-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 space-y-2">
                         <div className="flex space-x-1">
@@ -888,7 +917,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Feedback */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
+                  <div onClick={() => createItem('Feedback')} className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
                     <div className="aspect-[3/4] bg-gradient-to-br from-orange-50 to-red-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 flex items-center justify-center">
                         <div className="text-3xl">⭐</div>
@@ -900,7 +929,7 @@ const Dashboard = () => {
                   </div>
 
                   {/* Quiz */}
-                  <div className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
+                  <div onClick={() => createItem('Quiz')} className="bg-white rounded-lg border border-gray-200 hover:border-purple-500 transition-all overflow-hidden cursor-pointer">
                     <div className="aspect-[3/4] bg-gradient-to-br from-yellow-50 to-orange-50 p-3 flex items-center justify-center">
                       <div className="bg-white w-full h-full rounded shadow-sm p-2 flex items-center justify-center">
                         <div className="text-3xl">📝</div>
@@ -946,14 +975,13 @@ const Dashboard = () => {
                   <div className="mb-6">
                     <label className="block text-sm text-gray-600 mb-2">Name</label>
                     <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        value={editingName ? nameValue : user.name} 
+                      <input
+                        type="text"
+                        value={editingName ? nameValue : user.name}
                         onChange={(e) => setNameValue(e.target.value)}
                         disabled={!editingName}
-                        className={`flex-1 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                          editingName ? 'bg-white' : 'bg-gray-50'
-                        }`}
+                        className={`flex-1 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingName ? 'bg-white' : 'bg-gray-50'
+                          }`}
                       />
                       {editingName ? (
                         <>
@@ -986,14 +1014,13 @@ const Dashboard = () => {
                   <div>
                     <label className="block text-sm text-gray-600 mb-2">Email</label>
                     <div className="flex gap-2">
-                      <input 
-                        type="email" 
-                        value={editingEmail ? emailValue : user.email} 
+                      <input
+                        type="email"
+                        value={editingEmail ? emailValue : user.email}
                         onChange={(e) => setEmailValue(e.target.value)}
                         disabled={!editingEmail}
-                        className={`flex-1 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                          editingEmail ? 'bg-white' : 'bg-gray-50'
-                        }`}
+                        className={`flex-1 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingEmail ? 'bg-white' : 'bg-gray-50'
+                          }`}
                       />
                       {editingEmail ? (
                         <>
@@ -1031,9 +1058,9 @@ const Dashboard = () => {
                   <div className="space-y-4">
                     <label className="flex items-center justify-between cursor-pointer group">
                       <span className="text-sm text-gray-700">Email notifications</span>
-                      <input 
-                        type="checkbox" 
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         checked={emailNotifications}
                         onChange={(e) => {
                           setEmailNotifications(e.target.checked);
@@ -1044,9 +1071,9 @@ const Dashboard = () => {
                     </label>
                     <label className="flex items-center justify-between cursor-pointer group">
                       <span className="text-sm text-gray-700">Desktop notifications</span>
-                      <input 
-                        type="checkbox" 
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         checked={desktopNotifications}
                         onChange={(e) => {
                           setDesktopNotifications(e.target.checked);
@@ -1059,9 +1086,9 @@ const Dashboard = () => {
                     </label>
                     <label className="flex items-center justify-between cursor-pointer group">
                       <span className="text-sm text-gray-700">Auto-save documents</span>
-                      <input 
-                        type="checkbox" 
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                      <input
+                        type="checkbox"
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
                         checked={autoSave}
                         onChange={(e) => {
                           setAutoSave(e.target.checked);
@@ -1081,10 +1108,10 @@ const Dashboard = () => {
                       <span className="text-gray-500">16% full</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{width: '16%'}}></div>
+                      <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{ width: '16%' }}></div>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={handleManageStorage}
                     className="text-sm text-blue-600 hover:underline font-normal mt-2"
                   >
@@ -1096,13 +1123,13 @@ const Dashboard = () => {
                 <div className="p-8">
                   <h3 className="text-base font-normal text-gray-900 mb-4">Account Actions</h3>
                   <div className="space-y-3">
-                    <button 
+                    <button
                       onClick={handleChangePassword}
                       className="text-sm text-blue-600 hover:underline font-normal block"
                     >
                       Change password
                     </button>
-                    <button 
+                    <button
                       onClick={handleDeleteAccount}
                       className="text-sm text-red-600 hover:underline font-normal block"
                     >
@@ -1151,7 +1178,7 @@ const Dashboard = () => {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Send Feedback</h3>
                 <p className="text-sm text-gray-600 mb-4">Help us improve SyncWrite by sharing your thoughts and suggestions.</p>
-                <textarea 
+                <textarea
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   rows="5"
                   placeholder="Tell us what you think..."
@@ -1194,7 +1221,7 @@ const Dashboard = () => {
                     <span>12.6 GB available</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-blue-600 h-3 rounded-full transition-all" style={{width: '16%'}}></div>
+                    <div className="bg-blue-600 h-3 rounded-full transition-all" style={{ width: '16%' }}></div>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-6">
