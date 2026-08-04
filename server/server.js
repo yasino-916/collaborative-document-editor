@@ -21,6 +21,28 @@ app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET || 'syncwrite-super-secret-key-2026';
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+/** Returns { error } string if password fails strength rules, null if valid */
+const validatePassword = (password) => {
+  if (!password || password.length < 8)
+    return 'Password must be at least 8 characters long';
+  if (!/[A-Z]/.test(password))
+    return 'Password must contain at least one uppercase letter';
+  if (!/[a-z]/.test(password))
+    return 'Password must contain at least one lowercase letter';
+  if (!/[0-9]/.test(password))
+    return 'Password must contain at least one number';
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password))
+    return 'Password must contain at least one special character (!@#$%^&*)';
+  return null;
+};
+
+/** Consistent user shape returned in every auth response */
+const formatUser = (user) => ({ id: user.id, name: user.name, email: user.email });
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Middleware for auth
 const authMiddleware = async (req, res, next) => {
   try {
@@ -63,27 +85,14 @@ app.post('/api/auth/register', async (req, res) => {
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) return res.status(400).json({ error: 'Email already in use' });
 
-    // Validate password strength
-    if (!password || password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
-    }
-    
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
-    
-    if (!hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialChar) {
-      return res.status(400).json({ 
-        error: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (!@#$%^&*)' 
-      });
-    }
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({ name, email, password: hashedPassword });
-    
+
     const token = jwt.sign({ userId: user.id }, JWT_SECRET);
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    res.json({ token, user: formatUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -99,7 +108,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET);
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    res.json({ token, user: formatUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -108,31 +117,22 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/google', async (req, res) => {
   try {
     const { token } = req.body;
-    
-    // Using access_token to get user info from Google
+
     const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${token}` }
     });
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch user info from Google');
-    }
-    
+    if (!response.ok) throw new Error('Failed to fetch user info from Google');
+
     const payload = await response.json();
-    
+
     let user = await User.findOne({ where: { email: payload.email } });
     if (!user) {
-      // Create user if they don't exist
       const hashedPassword = await bcrypt.hash(Math.random().toString(36).slice(-8) + 'Aa1!', 10);
-      user = await User.create({
-        name: payload.name,
-        email: payload.email,
-        password: hashedPassword
-      });
+      user = await User.create({ name: payload.name, email: payload.email, password: hashedPassword });
     }
 
     const jwtToken = jwt.sign({ userId: user.id }, JWT_SECRET);
-    res.json({ token: jwtToken, user: { id: user.id, name: user.name, email: user.email } });
+    res.json({ token: jwtToken, user: formatUser(user) });
   } catch (err) {
     console.error('Google Auth Error:', err);
     res.status(401).json({ error: 'Invalid Google Token' });
@@ -140,7 +140,7 @@ app.post('/api/auth/google', async (req, res) => {
 });
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-  res.json({ user: { id: req.user.id, name: req.user.name, email: req.user.email } });
+  res.json({ user: formatUser(req.user) });
 });
 
 // Profile update routes
@@ -160,10 +160,7 @@ app.put('/api/auth/profile', authMiddleware, async (req, res) => {
     }
     
     await req.user.update(updates);
-    res.json({ 
-      message: 'Profile updated successfully',
-      user: { id: req.user.id, name: req.user.name, email: req.user.email }
-    });
+    res.json({ message: 'Profile updated successfully', user: formatUser(req.user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -182,29 +179,9 @@ app.put('/api/auth/change-password', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
 
-    // Validate new password length
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({ error: 'New password must be at least 8 characters long' });
-    }
-
-    // Validate password strength
-    const hasUpperCase = /[A-Z]/.test(newPassword);
-    const hasLowerCase = /[a-z]/.test(newPassword);
-    const hasNumber = /[0-9]/.test(newPassword);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
-
-    if (!hasUpperCase) {
-      return res.status(400).json({ error: 'Password must contain at least one uppercase letter' });
-    }
-    if (!hasLowerCase) {
-      return res.status(400).json({ error: 'Password must contain at least one lowercase letter' });
-    }
-    if (!hasNumber) {
-      return res.status(400).json({ error: 'Password must contain at least one number' });
-    }
-    if (!hasSpecialChar) {
-      return res.status(400).json({ error: 'Password must contain at least one special character (!@#$%^&*)' });
-    }
+    // Validate new password strength
+    const pwError = validatePassword(newPassword);
+    if (pwError) return res.status(400).json({ error: pwError });
 
     // Ensure new password is different from current
     const isSame = await bcrypt.compare(newPassword, req.user.password);
@@ -244,9 +221,6 @@ app.delete('/api/auth/account', authMiddleware, async (req, res) => {
 // Document Routes
 app.get('/api/documents', authMiddleware, async (req, res) => {
   try {
-    console.log(`[DOCS] Fetching documents for user ${req.user.email} (ID: ${req.user.id})`);
-    
-    // Get documents owned by user with collaborator count
     const ownedDocs = await Document.findAll({ 
       where: { ownerId: req.user.id },
       include: [
@@ -275,14 +249,9 @@ app.get('/api/documents', authMiddleware, async (req, res) => {
       }]
     });
 
-    console.log(`[DOCS] Found ${collabDocs.length} documents where user is collaborator`);
-
     const sharedDocs = collabDocs.map(c => c.Document);
-
-    console.log(`[DOCS] Returning ${ownedDocsWithInfo.length} owned docs and ${sharedDocs.length} shared docs`);
     res.json({ ownedDocs: ownedDocsWithInfo, sharedDocs });
   } catch (err) {
-    console.error(`[DOCS] Error:`, err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -363,59 +332,40 @@ app.delete('/api/documents/:id', authMiddleware, async (req, res) => {
 app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
   try {
     const { email, role } = req.body;
-    console.log(`[SHARE] User ${req.user.email} attempting to share document ${req.params.id} with ${email} as ${role}`);
-    
+
     const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
-    if (!document || (userRole !== 'OWNER' && userRole !== 'EDITOR')) {
-      console.log(`[SHARE] Access denied. User role: ${userRole}`);
+    if (!document || (userRole !== 'OWNER' && userRole !== 'EDITOR'))
       return res.status(403).json({ error: 'Access denied. Only owner or editor can share.' });
-    }
 
     const validRoles = ['VIEWER', 'COMMENTER', 'EDITOR'];
     const targetRole = validRoles.includes(role) ? role : 'VIEWER';
 
     const userToShare = await User.findOne({ where: { email } });
-    if (!userToShare) {
-      console.log(`[SHARE] User not found: ${email}`);
-      return res.status(404).json({ error: 'User not found' });
-    }
-    if (userToShare.id === document.ownerId) {
-      console.log(`[SHARE] Cannot share with document owner`);
+    if (!userToShare) return res.status(404).json({ error: 'User not found' });
+    if (userToShare.id === document.ownerId)
       return res.status(400).json({ error: 'Cannot share with document owner' });
-    }
 
     let collab = await Collaborator.findOne({ where: { documentId: document.id, userId: userToShare.id } });
     let isNewShare = false;
-    
+
     if (collab) {
-      console.log(`[SHARE] Updating existing collaborator role from ${collab.role} to ${targetRole}`);
       collab.role = targetRole;
       await collab.save();
     } else {
-      console.log(`[SHARE] Creating new collaborator for user ${userToShare.email} with role ${targetRole}`);
       collab = await Collaborator.create({ documentId: document.id, userId: userToShare.id, role: targetRole });
       isNewShare = true;
     }
 
-    // Notify the user who was added as collaborator via socket
-    // Emit to all sockets so the recipient's Dashboard can pick it up
-    console.log(`[SHARE] Emitting documentShared event to user ${userToShare.id}`);
     io.emit('documentShared', {
       userId: userToShare.id,
-      document: {
-        id: document.id,
-        title: document.title,
-        Owner: { name: req.user.name, email: req.user.email }
-      },
+      document: { id: document.id, title: document.title, Owner: { name: req.user.name, email: req.user.email } },
       sharedBy: req.user.name,
       role: targetRole,
       isNewShare
     });
 
-    console.log(`[SHARE] Successfully shared document with ${userToShare.name}`);
     res.json({ message: `Shared successfully with ${userToShare.name} as ${targetRole}`, collab });
   } catch (err) {
-    console.error(`[SHARE] Error:`, err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -4,10 +4,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import {
   FileText, Plus, LogOut, Trash2, Edit2, Copy, Menu, X,
-  Users, Clock, Star, Settings, HelpCircle, FolderOpen, HardDrive,
+  Users, Clock, Settings, HelpCircle, FolderOpen, HardDrive,
   Sheet, Presentation, Video, ClipboardList, KeyRound, Eye, EyeOff, Check
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { validatePassword } from '../utils/validatePassword';
 
 const Dashboard = () => {
   const { user, api, logout } = useAuth();
@@ -93,27 +94,15 @@ const Dashboard = () => {
     };
   }, [user, fetchDocs]);
 
-  const createDoc = async () => {
-    try {
-      const res = await api.post('/documents', { title: 'Untitled Document' });
-      navigate(`/document/${res.data.id}`);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  // createDoc is a convenience alias for creating a plain document
+  const createDoc = () => createItem('Untitled Document', 'doc');
 
   const createItem = async (title, type = 'doc') => {
     try {
-      // In a real app we'd have a type field in the DB.
-      // Here we rely on title to render the correct view for the prototype.
       const res = await api.post('/documents', { title });
-      if (type === 'sheet') {
-        navigate(`/spreadsheet/${res.data.id}`);
-      } else if (type === 'presentation') {
-        navigate(`/presentation/${res.data.id}`);
-      } else {
-        navigate(`/document/${res.data.id}`);
-      }
+      if (type === 'sheet') navigate(`/spreadsheet/${res.data.id}`);
+      else if (type === 'presentation') navigate(`/presentation/${res.data.id}`);
+      else navigate(`/document/${res.data.id}`);
     } catch (err) {
       console.error(err);
     }
@@ -231,27 +220,10 @@ const Dashboard = () => {
     setPwError('');
     setPwSuccess(false);
 
-    // Validate new password strength
-    if (newPassword.length < 8) {
-      setPwError('New password must be at least 8 characters long.');
-      return;
-    }
-    if (!/[A-Z]/.test(newPassword)) {
-      setPwError('New password must contain at least one uppercase letter.');
-      return;
-    }
-    if (!/[a-z]/.test(newPassword)) {
-      setPwError('New password must contain at least one lowercase letter.');
-      return;
-    }
-    if (!/[0-9]/.test(newPassword)) {
-      setPwError('New password must contain at least one number.');
-      return;
-    }
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
-      setPwError('New password must contain at least one special character (!@#$%^&*).');
-      return;
-    }
+    // Validate using shared util
+    const pwValidationError = validatePassword(newPassword);
+    if (pwValidationError) { setPwError(pwValidationError); return; }
+
     if (newPassword !== confirmPassword) {
       setPwError('New password and confirm password do not match.');
       return;
