@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import QuillCursors from 'quill-cursors';
 import { format, formatDistanceToNow } from 'date-fns';
-import html2pdf from 'html2pdf.js';
 import pptxgen from 'pptxgenjs';
 import mammoth from 'mammoth';
 
@@ -567,7 +566,7 @@ const DocumentEditor = () => {
   };
 
   // Export logic
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!quill) return;
     
     if (exportType === 'md') {
@@ -582,30 +581,53 @@ const DocumentEditor = () => {
       URL.revokeObjectURL(url);
       addNotification('success', 'Document exported to Markdown!');
     } else if (exportType === 'pdf') {
-      const element = quill.root;
-      const opt = {
-        margin:       0.5,
-        filename:     `${title || 'document'}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2 },
-        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-      };
-      html2pdf().set(opt).from(element).save().then(() => {
+      try {
+        addNotification('info', 'Generating PDF... Please wait.');
+        const html = quill.root.innerHTML;
+        
+        const response = await api.post(`/documents/${documentId}/export/pdf`, 
+          { content: html }, 
+          { responseType: 'blob' }
+        );
+        
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${title || 'document'}.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+        
         addNotification('success', 'Document exported to PDF!');
-      });
+      } catch (err) {
+        console.error('PDF export error:', err);
+        addNotification('warning', 'Failed to export PDF: ' + (err.response?.data?.error || err.message));
+      }
     } else if (exportType === 'docx') {
-      const html = quill.root.innerHTML;
-      const preHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export</title></head><body>";
-      const postHtml = "</body></html>";
-      const docHtml = preHtml + html + postHtml;
-      const blob = new Blob(['\\ufeff', docHtml], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${title || 'document'}.doc`;
-      link.click();
-      URL.revokeObjectURL(url);
-      addNotification('success', 'Document exported to DOCX!');
+      try {
+        addNotification('info', 'Generating Word document... Please wait.');
+        const html = quill.root.innerHTML;
+        
+        const response = await api.post(`/documents/${documentId}/export/docx`, 
+          { content: html }, 
+          { responseType: 'blob' }
+        );
+        
+        const blob = new Blob([response.data], { 
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${title || 'document'}.docx`;
+        link.click();
+        URL.revokeObjectURL(url);
+        
+        addNotification('success', 'Document exported to DOCX!');
+      } catch (err) {
+        console.error('DOCX export error:', err);
+        addNotification('warning', 'Failed to export DOCX: ' + (err.response?.data?.error || err.message));
+      }
     } else if (exportType === 'pptx') {
       const pres = new pptxgen();
       const slide = pres.addSlide();
@@ -657,7 +679,7 @@ const DocumentEditor = () => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const textContent = event.target.result;
-        const htmlContent = `<p>${textContent.replace(/\\n/g, '<br/>')}</p>`;
+        const htmlContent = `<p>${textContent.replace(/\n/g, '<br/>')}</p>`;
         updateContent(htmlContent, file.name);
       };
       reader.readAsText(file);
