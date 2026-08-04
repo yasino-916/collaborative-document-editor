@@ -5,3 +5,26 @@
     @apply bg-gray-50 text-gray-900;
   }
 }
+
+/* ── Quill Editor: allow content to grow and scroll naturally ── */
+.ql-container {
+  height: auto !important;
+  min-height: 750px;
+  font-size: 16px;
+}
+
+.ql-editor {
+  height: auto !important;
+  min-height: 750px;
+  padding: 40px 48px;
+  line-height: 1.8;
+  overflow-y: visible !important;
+}
+
+.ql-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: inherit;
+  border-bottom: 1px solid #e5e7eb;
+}

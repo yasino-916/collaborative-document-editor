@@ -1470,7 +1470,7 @@ const DocumentEditor = () => {
           )}
 
           {/* Quill Editor Card */}
-          <div className={`w-full max-w-4xl shadow-xl rounded-xl overflow-hidden border min-h-[850px] flex flex-col print:shadow-none print:border-none ${
+          <div className={`w-full max-w-4xl shadow-xl rounded-xl border mb-8 flex flex-col print:shadow-none print:border-none ${
             isDarkMode ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200 text-gray-900'
           }`}>
             <div className="flex-1" ref={wrapperRef}></div>
