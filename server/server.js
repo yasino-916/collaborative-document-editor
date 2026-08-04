@@ -331,6 +331,32 @@ app.put('/api/documents/:id/comments/:commentId/resolve', authMiddleware, async 
   }
 });
 
+app.put('/api/documents/:id/comments/:commentId', authMiddleware, async (req, res) => {
+  try {
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || !userRole) return res.status(403).json({ error: 'Access denied' });
+
+    const comment = await Comment.findByPk(req.params.commentId);
+    if (!comment || comment.documentId !== document.id) return res.status(404).json({ error: 'Comment not found' });
+
+    if (comment.userId !== req.user.id) {
+      return res.status(403).json({ error: 'You can only edit your own comments' });
+    }
+
+    const { content } = req.body;
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Comment content cannot be empty' });
+
+    comment.content = content.trim();
+    await comment.save();
+
+    io.to(document.id).emit('comment-edited', { commentId: comment.id, content: comment.content });
+
+    res.json(comment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/documents/:id/comments/:commentId', authMiddleware, async (req, res) => {
   try {
     const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);

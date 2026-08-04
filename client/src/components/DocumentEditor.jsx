@@ -119,6 +119,7 @@ const DocumentEditor = () => {
   const [snapshotName, setSnapshotName] = useState('');
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
   const [restoringVersionId, setRestoringVersionId] = useState(null);
+  const [versionSearchQuery, setVersionSearchQuery] = useState('');
 
   // Comments state
   const [comments, setComments] = useState([]);
@@ -126,6 +127,8 @@ const DocumentEditor = () => {
   const [newCommentText, setNewCommentText] = useState('');
   const [replyTextMap, setReplyTextMap] = useState({});
   const [activeReplyId, setActiveReplyId] = useState(null);
+  const [editCommentId, setEditCommentId] = useState(null);
+  const [editCommentText, setEditCommentText] = useState('');
 
   // Notifications State (Toast stack)
   const [notifications, setNotifications] = useState([]);
@@ -447,6 +450,7 @@ const DocumentEditor = () => {
 
     socket.on('comment-resolved', () => fetchComments());
     socket.on('comment-deleted', () => fetchComments());
+    socket.on('comment-edited', () => fetchComments());
 
     return () => {
       socket.off('receive-changes', changesHandler);
@@ -460,6 +464,7 @@ const DocumentEditor = () => {
       socket.off('comment-added');
       socket.off('comment-resolved');
       socket.off('comment-deleted');
+      socket.off('comment-edited');
     };
   }, [socket, quill, previewVersion, user.id, activeUsers, documentId, addNotification]);
 
@@ -687,6 +692,18 @@ const DocumentEditor = () => {
       fetchComments();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete comment');
+    }
+  };
+
+  const handleEditCommentSubmit = async (commentId) => {
+    if (!editCommentText.trim()) return;
+    try {
+      await api.put(`/documents/${documentId}/comments/${commentId}`, { content: editCommentText.trim() });
+      setEditCommentId(null);
+      setEditCommentText('');
+      fetchComments();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to edit comment');
     }
   };
 
@@ -1579,6 +1596,16 @@ const DocumentEditor = () => {
                           </button>
                         )}
 
+                        {cmt.userId === user.id && (
+                          <button
+                            onClick={() => { setEditCommentId(cmt.id); setEditCommentText(cmt.content); }}
+                            className="p-1 text-gray-400 hover:text-blue-500 rounded"
+                            title="Edit comment"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                        )}
+
                         {(cmt.userId === user.id || userRole === 'OWNER') && (
                           <button
                             onClick={() => handleDeleteComment(cmt.id)}
@@ -1591,9 +1618,22 @@ const DocumentEditor = () => {
                       </div>
                     </div>
 
-                    <p className={`text-xs mb-2 leading-relaxed ${cmt.resolved ? 'line-through text-gray-400' : ''}`}>
-                      {cmt.content}
-                    </p>
+                    {editCommentId === cmt.id ? (
+                      <div className="flex space-x-2 mb-2">
+                        <input
+                          type="text"
+                          value={editCommentText}
+                          onChange={(e) => setEditCommentText(e.target.value)}
+                          className={`flex-1 p-1 text-xs border rounded outline-none ${isDarkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-white border-gray-300'}`}
+                        />
+                        <button onClick={() => handleEditCommentSubmit(cmt.id)} className="text-blue-500 font-medium text-xs">Save</button>
+                        <button onClick={() => setEditCommentId(null)} className="text-gray-400 text-xs">Cancel</button>
+                      </div>
+                    ) : (
+                      <p className={`text-xs mb-2 leading-relaxed ${cmt.resolved ? 'line-through text-gray-400' : ''}`}>
+                        {cmt.content}
+                      </p>
+                    )}
 
                     {/* Nested Replies */}
                     {cmt.Replies && cmt.Replies.length > 0 && (
@@ -1606,6 +1646,11 @@ const DocumentEditor = () => {
                                 <span className="text-[10px] text-gray-400">
                                   {formatDistanceToNow(new Date(r.createdAt), { addSuffix: true })}
                                 </span>
+                                {r.userId === user.id && (
+                                  <button onClick={() => { setEditCommentId(r.id); setEditCommentText(r.content); }} className="text-gray-400 hover:text-blue-500 p-0.5" title="Edit reply">
+                                    <Edit3 size={12} />
+                                  </button>
+                                )}
                                 {(r.userId === user.id || userRole === 'OWNER') && (
                                   <button
                                     onClick={() => handleDeleteComment(r.id)}
@@ -1617,7 +1662,20 @@ const DocumentEditor = () => {
                                 )}
                               </div>
                             </div>
-                            <p className="text-gray-300">{r.content}</p>
+                            {editCommentId === r.id ? (
+                              <div className="flex space-x-2 mt-1">
+                                <input
+                                  type="text"
+                                  value={editCommentText}
+                                  onChange={(e) => setEditCommentText(e.target.value)}
+                                  className={`flex-1 p-1 text-[11px] border rounded outline-none ${isDarkMode ? 'bg-gray-600 text-white border-gray-500' : 'bg-white border-gray-300'}`}
+                                />
+                                <button onClick={() => handleEditCommentSubmit(r.id)} className="text-blue-500 text-[10px]">Save</button>
+                                <button onClick={() => setEditCommentId(null)} className="text-gray-400 text-[10px]">Cancel</button>
+                              </div>
+                            ) : (
+                              <p className="text-gray-300">{r.content}</p>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1713,8 +1771,22 @@ const DocumentEditor = () => {
 
             {/* Revision List */}
             <div className="p-4 flex-1 overflow-y-auto space-y-3">
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Revisions ({versions.length})
+              <div className="flex flex-col mb-4 space-y-2">
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  Revisions ({versions.length})
+                </div>
+                <div className="relative">
+                  <Search size={14} className="absolute left-2 top-2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search versions..."
+                    value={versionSearchQuery}
+                    onChange={(e) => setVersionSearchQuery(e.target.value)}
+                    className={`w-full pl-7 p-1.5 text-xs border rounded-lg outline-none ${
+                      isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
+                    }`}
+                  />
+                </div>
               </div>
 
               {loadingVersions ? (
@@ -1722,7 +1794,9 @@ const DocumentEditor = () => {
               ) : versions.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 text-sm">No revisions created yet.</div>
               ) : (
-                versions.map((ver) => (
+                versions
+                  .filter(v => (v.versionName || 'Snapshot').toLowerCase().includes(versionSearchQuery.toLowerCase()))
+                  .map((ver) => (
                   <div
                     key={ver.id}
                     className={`p-3.5 rounded-xl border transition-all ${
