@@ -14,6 +14,13 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setError('Password must be at least 8 characters long and include an uppercase letter, lowercase letter, number, and special character.');
+      return;
+    }
+
     setError('');
     setLoading(true);
     try {
