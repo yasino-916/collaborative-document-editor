@@ -8,10 +8,13 @@ import {
   ArrowLeft, Users, Share2, Save, Check, History, 
   Clock, RotateCcw, Eye, X, Plus, MapPin, 
   MessageSquare, Send, CheckCircle, Trash2, Shield, Edit3, MessageCircle, AlertCircle,
-  ChevronDown, Lock, Search, Download, Upload, Moon, Sun, Keyboard, Wifi, WifiOff, Bell, Settings
+  ChevronDown, Lock, Search, Download, Upload, Moon, Sun, Keyboard, Wifi, WifiOff, Bell, Settings, FileText, Image as ImageIcon
 } from 'lucide-react';
 import QuillCursors from 'quill-cursors';
 import { format, formatDistanceToNow } from 'date-fns';
+import html2pdf from 'html2pdf.js';
+import pptxgen from 'pptxgenjs';
+import mammoth from 'mammoth';
 
 Quill.register('modules/cursors', QuillCursors);
 
@@ -99,6 +102,10 @@ const DocumentEditor = () => {
 
   // Shortcuts Modal State
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  
+  // Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportType, setExportType] = useState('pdf');
   
   // Sharing state
   const [showShare, setShowShare] = useState(false);
@@ -559,45 +566,104 @@ const DocumentEditor = () => {
     addNotification('success', 'Replaced all occurrences!');
   };
 
-  // Export to Markdown (.md)
-  const handleExportMarkdown = () => {
+  // Export logic
+  const handleExport = () => {
     if (!quill) return;
-    const html = quill.root.innerHTML;
-    const md = htmlToMarkdown(html);
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${title || 'document'}.md`;
-    link.click();
-    URL.revokeObjectURL(url);
-    addNotification('success', 'Document exported to Markdown!');
+    
+    if (exportType === 'md') {
+      const html = quill.root.innerHTML;
+      const md = htmlToMarkdown(html);
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${title || 'document'}.md`;
+      link.click();
+      URL.revokeObjectURL(url);
+      addNotification('success', 'Document exported to Markdown!');
+    } else if (exportType === 'pdf') {
+      const element = quill.root;
+      const opt = {
+        margin:       0.5,
+        filename:     `${title || 'document'}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(element).save().then(() => {
+        addNotification('success', 'Document exported to PDF!');
+      });
+    } else if (exportType === 'docx') {
+      const html = quill.root.innerHTML;
+      const preHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export</title></head><body>";
+      const postHtml = "</body></html>";
+      const docHtml = preHtml + html + postHtml;
+      const blob = new Blob(['\\ufeff', docHtml], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${title || 'document'}.doc`;
+      link.click();
+      URL.revokeObjectURL(url);
+      addNotification('success', 'Document exported to DOCX!');
+    } else if (exportType === 'pptx') {
+      const pres = new pptxgen();
+      const slide = pres.addSlide();
+      const text = quill.getText();
+      slide.addText(text, { x: 0.5, y: 0.5, w: "90%", h: "90%", align: "left" });
+      pres.writeFile({ fileName: `${title || 'document'}.pptx` }).then(() => {
+        addNotification('success', 'Document exported to PPTX!');
+      });
+    }
+    setShowExportModal(false);
   };
 
-  // Export to PDF (.pdf)
-  const handleExportPDF = () => {
-    window.print();
-    addNotification('info', 'PDF Export ready');
+  const updateContent = (htmlContent, fileName) => {
+    if (quill) {
+      quill.root.innerHTML = htmlContent;
+      if (socket && (userRole === 'OWNER' || userRole === 'EDITOR')) {
+        socket.emit('save-document', htmlContent);
+      }
+      addNotification('success', `Imported "${fileName}" successfully!`);
+    }
   };
 
-  // Import Markdown (.md)
-  const handleImportMarkdown = (e) => {
+  const handleImportFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const mdContent = event.target.result;
-      const htmlContent = markdownToHtml(mdContent);
-      if (quill) {
-        quill.root.innerHTML = htmlContent;
-        if (socket && (userRole === 'OWNER' || userRole === 'EDITOR')) {
-          socket.emit('save-document', htmlContent);
+    if (file.name.endsWith('.md')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const mdContent = event.target.result;
+        const htmlContent = markdownToHtml(mdContent);
+        updateContent(htmlContent, file.name);
+      };
+      reader.readAsText(file);
+    } else if (file.name.endsWith('.docx')) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const arrayBuffer = event.target.result;
+        try {
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          updateContent(result.value, file.name);
+        } catch (err) {
+          console.error('Error importing DOCX:', err);
+          addNotification('warning', 'Failed to parse DOCX file');
         }
-        addNotification('success', `Imported "${file.name}" successfully!`);
-      }
-    };
-    reader.readAsText(file);
+      };
+      reader.readAsArrayBuffer(file);
+    } else if (file.name.endsWith('.txt')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const textContent = event.target.result;
+        const htmlContent = `<p>${textContent.replace(/\\n/g, '<br/>')}</p>`;
+        updateContent(htmlContent, file.name);
+      };
+      reader.readAsText(file);
+    } else {
+      addNotification('warning', 'Unsupported file type for import.');
+    }
   };
 
   // Update Title
@@ -1179,15 +1245,15 @@ const DocumentEditor = () => {
                   </button>
 
                   <button
-                    onClick={() => { handleExportMarkdown(); setShowSettingsDropdown(false); }}
+                    onClick={() => { setShowExportModal(true); setShowSettingsDropdown(false); }}
                     className="w-full text-left p-2 flex items-center rounded-lg hover:bg-gray-500/10 text-xs font-medium"
                   >
-                    <Download size={14} className="mr-2 text-emerald-500" /> Export as Markdown
+                    <Download size={14} className="mr-2 text-emerald-500" /> Export Document
                   </button>
 
                   <label className="w-full cursor-pointer p-2 flex items-center rounded-lg hover:bg-gray-500/10 text-xs font-medium">
-                    <Upload size={14} className="mr-2 text-blue-500" /> Import Markdown File
-                    <input type="file" accept=".md" onChange={(e) => { handleImportMarkdown(e); setShowSettingsDropdown(false); }} className="hidden" />
+                    <Upload size={14} className="mr-2 text-blue-500" /> Import File (.md, .docx, .txt)
+                    <input type="file" accept=".md,.docx,.txt" onChange={(e) => { handleImportFile(e); setShowSettingsDropdown(false); }} className="hidden" />
                   </label>
 
                   <button
@@ -1426,6 +1492,68 @@ const DocumentEditor = () => {
                   <span>Toggle History Drawer</span>
                   <kbd className="px-2 py-0.5 bg-gray-700 text-gray-200 rounded font-mono text-[11px]">Ctrl + Shift + H</kbd>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Export Options Modal */}
+        {showExportModal && (
+          <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
+            <div className={`w-full max-w-sm rounded-2xl shadow-2xl border p-6 animate-in zoom-in-95 ${
+              isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-100 text-gray-900'
+            }`}>
+              <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-700/40">
+                <h3 className="font-bold text-base flex items-center">
+                  <Download size={18} className="mr-2 text-emerald-500" /> Export Document
+                </h3>
+                <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-4 mb-4">
+                <label className="block text-xs font-semibold text-gray-500 mb-2">Select Format:</label>
+                
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <button 
+                    onClick={() => setExportType('pdf')}
+                    className={`p-3 rounded-lg border-2 flex flex-col items-center justify-center space-y-2 transition-colors ${exportType === 'pdf' ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 font-bold' : (isDarkMode ? 'border-gray-600 bg-gray-700 hover:bg-gray-600' : 'border-gray-200 bg-gray-50 hover:bg-gray-100')}`}
+                  >
+                    <FileText size={24} />
+                    <span>PDF</span>
+                  </button>
+                  <button 
+                    onClick={() => setExportType('docx')}
+                    className={`p-3 rounded-lg border-2 flex flex-col items-center justify-center space-y-2 transition-colors ${exportType === 'docx' ? 'border-blue-500 bg-blue-500/10 text-blue-600 font-bold' : (isDarkMode ? 'border-gray-600 bg-gray-700 hover:bg-gray-600' : 'border-gray-200 bg-gray-50 hover:bg-gray-100')}`}
+                  >
+                    <FileText size={24} />
+                    <span>Word (.docx)</span>
+                  </button>
+                  <button 
+                    onClick={() => setExportType('pptx')}
+                    className={`p-3 rounded-lg border-2 flex flex-col items-center justify-center space-y-2 transition-colors ${exportType === 'pptx' ? 'border-amber-500 bg-amber-500/10 text-amber-600 font-bold' : (isDarkMode ? 'border-gray-600 bg-gray-700 hover:bg-gray-600' : 'border-gray-200 bg-gray-50 hover:bg-gray-100')}`}
+                  >
+                    <ImageIcon size={24} />
+                    <span>PowerPoint</span>
+                  </button>
+                  <button 
+                    onClick={() => setExportType('md')}
+                    className={`p-3 rounded-lg border-2 flex flex-col items-center justify-center space-y-2 transition-colors ${exportType === 'md' ? 'border-purple-500 bg-purple-500/10 text-purple-600 font-bold' : (isDarkMode ? 'border-gray-600 bg-gray-700 hover:bg-gray-600' : 'border-gray-200 bg-gray-50 hover:bg-gray-100')}`}
+                  >
+                    <FileText size={24} />
+                    <span>Markdown</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <button onClick={() => setShowExportModal(false)} className={`px-4 py-2 text-xs font-semibold rounded-lg ${isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  Cancel
+                </button>
+                <button onClick={handleExport} className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center">
+                  <Download size={14} className="mr-1.5" /> Export Now
+                </button>
               </div>
             </div>
           </div>
