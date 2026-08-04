@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { 
   FileText, Plus, LogOut, Trash2, Edit2, Copy, Menu, X,
   Users, Clock, Star, Settings, HelpCircle, FolderOpen, HardDrive,
@@ -14,7 +15,9 @@ const Dashboard = () => {
   const [sharedDocs, setSharedDocs] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState('docs');
+  const [notification, setNotification] = useState(null);
   const navigate = useNavigate();
+  const socketRef = useRef(null);
 
   // Settings state
   const [editingName, setEditingName] = useState(false);
@@ -25,16 +28,7 @@ const Dashboard = () => {
   const [desktopNotifications, setDesktopNotifications] = useState(false);
   const [autoSave, setAutoSave] = useState(true);
 
-  useEffect(() => {
-    fetchDocs();
-    // Initialize settings values from user
-    if (user) {
-      setNameValue(user.name || '');
-      setEmailValue(user.email || '');
-    }
-  }, [user]);
-
-  const fetchDocs = async () => {
+  const fetchDocs = useCallback(async () => {
     try {
       const res = await api.get('/documents');
       setOwnedDocs(res.data.ownedDocs);
@@ -42,7 +36,38 @@ const Dashboard = () => {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    fetchDocs();
+    // Initialize settings values from user
+    if (user) {
+      setNameValue(user.name || '');
+      setEmailValue(user.email || '');
+    }
+  }, [user, fetchDocs]);
+
+  // Socket connection for real-time share notifications
+  useEffect(() => {
+    if (!user) return;
+
+    const s = io('http://localhost:3001');
+    socketRef.current = s;
+
+    s.on('documentShared', (data) => {
+      if (data.userId === user.id) {
+        fetchDocs();
+        const msg = `${data.sharedBy} shared "${data.document.title}" with you as ${data.role}`;
+        setNotification(msg);
+        setTimeout(() => setNotification(null), 5000);
+      }
+    });
+
+    return () => {
+      s.disconnect();
+      socketRef.current = null;
+    };
+  }, [user, fetchDocs]);
 
   const createDoc = async () => {
     try {
@@ -205,14 +230,27 @@ const Dashboard = () => {
           <div className="p-3 bg-indigo-50 text-blue-600 rounded-lg mr-4">
             <FileText size={24} />
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900 line-clamp-1">{doc.title}</h3>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-gray-900 line-clamp-1">{doc.title}</h3>
+              {isOwner && doc.hasCollaborators && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                  <Users size={12} className="mr-1" />
+                  Shared
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500 mt-1">
               Created: {format(new Date(doc.createdAt || doc.updatedAt), 'MMM d, yyyy h:mm a')}
             </p>
             <p className="text-xs text-gray-500">
               Modified: {format(new Date(doc.updatedAt), 'MMM d, yyyy h:mm a')}
             </p>
+            {isOwner && doc.collaboratorCount > 0 && (
+              <p className="text-xs text-blue-600 mt-1">
+                {doc.collaboratorCount} {doc.collaboratorCount === 1 ? 'collaborator' : 'collaborators'}
+              </p>
+            )}
           </div>
         </div>
       </Link>
@@ -239,6 +277,16 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      {/* Share notification toast */}
+      {notification && (
+        <div className="fixed top-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center space-x-3 animate-in fade-in slide-in-from-top-2">
+          <Users size={16} className="flex-shrink-0" />
+          <span>{notification}</span>
+          <button onClick={() => setNotification(null)} className="ml-2 text-white/80 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {/* Sidebar - Google Docs Style */}
       <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} bg-white border-r border-gray-200 transition-all duration-300 ease-in-out overflow-hidden flex flex-col`}>
         {/* Logo/Header */}
@@ -375,6 +423,13 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center space-x-4">
               <button
+                onClick={fetchDocs}
+                className="flex items-center text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-lg hover:bg-gray-100"
+                title="Refresh documents"
+              >
+                <Clock size={20} />
+              </button>
+              <button
                 onClick={createDoc}
                 className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-sm transition-all"
               >
@@ -410,6 +465,18 @@ const Dashboard = () => {
                   >
                     <Plus size={20} className="mr-2" /> Create Document
                   </button>
+                </div>
+              )}
+
+              {/* Shared with me section */}
+              {sharedDocs.length > 0 && (
+                <div className="mt-10">
+                  <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center">
+                    <Users size={18} className="mr-2 text-blue-500" /> Shared with me
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {sharedDocs.map(doc => renderDocCard(doc, false))}
+                  </div>
                 </div>
               )}
             </>

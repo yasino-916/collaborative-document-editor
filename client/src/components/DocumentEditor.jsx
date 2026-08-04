@@ -248,11 +248,13 @@ const DocumentEditor = () => {
     fetchDocInfo();
     const s = io('http://localhost:3001');
     setSocket(s);
+    window.socket = s; // Expose for Dashboard's documentShared listener
 
     s.emit('get-document', { documentId, token });
 
     return () => {
       s.disconnect();
+      window.socket = null;
     };
   }, [documentId, token]);
 
@@ -705,13 +707,14 @@ const DocumentEditor = () => {
   const handleShare = async (e) => {
     e.preventDefault();
     try {
-      await api.post(`/documents/${documentId}/share`, { email: shareEmail, role: shareRole });
-      addNotification('success', `Shared with ${shareEmail} as ${shareRole}!`);
+      const res = await api.post(`/documents/${documentId}/share`, { email: shareEmail, role: shareRole });
+      addNotification('success', res.data.message || `Shared with ${shareEmail} as ${shareRole}!`);
       setShareEmail('');
+      setShareRole('EDITOR');
       fetchCollaborators();
     } catch (err) {
-      let errorMsg = err.response?.data?.error || 'Failed to share';
-      alert(errorMsg);
+      const errorMsg = err.response?.data?.error || 'Failed to share document';
+      addNotification('warning', errorMsg);
     }
   };
 

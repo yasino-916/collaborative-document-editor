@@ -229,11 +229,29 @@ app.delete('/api/auth/account', authMiddleware, async (req, res) => {
 // Document Routes
 app.get('/api/documents', authMiddleware, async (req, res) => {
   try {
+    console.log(`[DOCS] Fetching documents for user ${req.user.email} (ID: ${req.user.id})`);
+    
+    // Get documents owned by user with collaborator count
     const ownedDocs = await Document.findAll({ 
       where: { ownerId: req.user.id },
-      include: [{ model: User, as: 'Owner', attributes: ['id', 'name', 'email'] }]
+      include: [
+        { model: User, as: 'Owner', attributes: ['id', 'name', 'email'] },
+        { model: Collaborator, attributes: ['id', 'userId'] }
+      ]
     });
 
+    console.log(`[DOCS] Found ${ownedDocs.length} owned documents`);
+
+    // Add hasCollaborators flag to owned docs
+    const ownedDocsWithInfo = ownedDocs.map(doc => {
+      const docJson = doc.toJSON();
+      docJson.hasCollaborators = docJson.Collaborators && docJson.Collaborators.length > 0;
+      docJson.collaboratorCount = docJson.Collaborators ? docJson.Collaborators.length : 0;
+      delete docJson.Collaborators; // Remove the full list, just keep the count
+      return docJson;
+    });
+
+    // Get documents where user is a collaborator
     const collabDocs = await Collaborator.findAll({
       where: { userId: req.user.id },
       include: [{
@@ -242,10 +260,14 @@ app.get('/api/documents', authMiddleware, async (req, res) => {
       }]
     });
 
+    console.log(`[DOCS] Found ${collabDocs.length} documents where user is collaborator`);
+
     const sharedDocs = collabDocs.map(c => c.Document);
 
-    res.json({ ownedDocs, sharedDocs });
+    console.log(`[DOCS] Returning ${ownedDocsWithInfo.length} owned docs and ${sharedDocs.length} shared docs`);
+    res.json({ ownedDocs: ownedDocsWithInfo, sharedDocs });
   } catch (err) {
+    console.error(`[DOCS] Error:`, err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -326,8 +348,11 @@ app.delete('/api/documents/:id', authMiddleware, async (req, res) => {
 app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
   try {
     const { email, role } = req.body;
+    console.log(`[SHARE] User ${req.user.email} attempting to share document ${req.params.id} with ${email} as ${role}`);
+    
     const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
     if (!document || (userRole !== 'OWNER' && userRole !== 'EDITOR')) {
+      console.log(`[SHARE] Access denied. User role: ${userRole}`);
       return res.status(403).json({ error: 'Access denied. Only owner or editor can share.' });
     }
 
@@ -335,19 +360,47 @@ app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
     const targetRole = validRoles.includes(role) ? role : 'VIEWER';
 
     const userToShare = await User.findOne({ where: { email } });
-    if (!userToShare) return res.status(404).json({ error: 'User not found' });
-    if (userToShare.id === document.ownerId) return res.status(400).json({ error: 'Cannot share with document owner' });
-
-    let collab = await Collaborator.findOne({ where: { documentId: document.id, userId: userToShare.id } });
-    if (collab) {
-      collab.role = targetRole;
-      await collab.save();
-      return res.json({ message: `Updated ${userToShare.name} permissions to ${targetRole}`, collab });
+    if (!userToShare) {
+      console.log(`[SHARE] User not found: ${email}`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (userToShare.id === document.ownerId) {
+      console.log(`[SHARE] Cannot share with document owner`);
+      return res.status(400).json({ error: 'Cannot share with document owner' });
     }
 
-    collab = await Collaborator.create({ documentId: document.id, userId: userToShare.id, role: targetRole });
+    let collab = await Collaborator.findOne({ where: { documentId: document.id, userId: userToShare.id } });
+    let isNewShare = false;
+    
+    if (collab) {
+      console.log(`[SHARE] Updating existing collaborator role from ${collab.role} to ${targetRole}`);
+      collab.role = targetRole;
+      await collab.save();
+    } else {
+      console.log(`[SHARE] Creating new collaborator for user ${userToShare.email} with role ${targetRole}`);
+      collab = await Collaborator.create({ documentId: document.id, userId: userToShare.id, role: targetRole });
+      isNewShare = true;
+    }
+
+    // Notify the user who was added as collaborator via socket
+    // Emit to all sockets so the recipient's Dashboard can pick it up
+    console.log(`[SHARE] Emitting documentShared event to user ${userToShare.id}`);
+    io.emit('documentShared', {
+      userId: userToShare.id,
+      document: {
+        id: document.id,
+        title: document.title,
+        Owner: { name: req.user.name, email: req.user.email }
+      },
+      sharedBy: req.user.name,
+      role: targetRole,
+      isNewShare
+    });
+
+    console.log(`[SHARE] Successfully shared document with ${userToShare.name}`);
     res.json({ message: `Shared successfully with ${userToShare.name} as ${targetRole}`, collab });
   } catch (err) {
+    console.error(`[SHARE] Error:`, err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -363,6 +416,47 @@ app.get('/api/documents/:id/collaborators', authMiddleware, async (req, res) => 
     });
 
     res.json({ owner: document.Owner, collaborators: collabs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/documents/:id/collaborators', authMiddleware, async (req, res) => {
+  try {
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || userRole !== 'OWNER') return res.status(403).json({ error: 'Only owner can add collaborators' });
+
+    const { email, role = 'EDITOR' } = req.body;
+    
+    // Find user by email
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(404).json({ error: 'User not found with this email' });
+
+    // Don't allow owner to add themselves as collaborator
+    if (user.id === document.ownerId) {
+      return res.status(400).json({ error: 'Document owner cannot be added as collaborator' });
+    }
+
+    // Check if already a collaborator
+    const existing = await Collaborator.findOne({ 
+      where: { documentId: req.params.id, userId: user.id } 
+    });
+    if (existing) {
+      return res.status(400).json({ error: 'User is already a collaborator' });
+    }
+
+    // Add collaborator
+    const collaborator = await Collaborator.create({
+      documentId: req.params.id,
+      userId: user.id,
+      role
+    });
+
+    const newCollab = await Collaborator.findByPk(collaborator.id, {
+      include: [{ model: User, attributes: ['id', 'name', 'email'] }]
+    });
+
+    res.json({ message: 'Collaborator added successfully', collaborator: newCollab });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
