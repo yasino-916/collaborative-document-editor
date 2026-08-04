@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
 import {
   FileText, Plus, LogOut, Trash2, Edit2, Copy, Menu, X,
   Users, Clock, Star, Settings, HelpCircle, FolderOpen, HardDrive,
-  Sheet, Presentation, Video, ClipboardList
+  Sheet, Presentation, Video, ClipboardList, KeyRound, Eye, EyeOff, Check
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -15,9 +14,8 @@ const Dashboard = () => {
   const [sharedDocs, setSharedDocs] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState('docs');
-  const [notification, setNotification] = useState(null);
   const navigate = useNavigate();
-  const socketRef = useRef(null);
+  const profileMenuRef = useRef(null);
 
   // Settings state
   const [editingName, setEditingName] = useState(false);
@@ -27,6 +25,21 @@ const Dashboard = () => {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [desktopNotifications, setDesktopNotifications] = useState(false);
   const [autoSave, setAutoSave] = useState(true);
+
+  // Profile dropdown state
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+  // Change password modal state
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
 
   const fetchDocs = useCallback(async () => {
     try {
@@ -164,52 +177,95 @@ const Dashboard = () => {
     }
   };
 
-  const handleChangePassword = () => {
-    const newPassword = window.prompt('Enter new password:\n\nRequirements:\n- Minimum 8 characters\n- At least one uppercase letter\n- At least one lowercase letter\n- At least one number\n- At least one special character (!@#$%^&*)');
-    if (!newPassword) return;
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-    // Validate password strength
+  // Password strength checker
+  const getPasswordStrength = (pw) => {
+    if (!pw) return { score: 0, label: '', color: '' };
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[a-z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw)) score++;
+    if (score <= 2) return { score, label: 'Weak', color: 'bg-red-500' };
+    if (score === 3) return { score, label: 'Fair', color: 'bg-yellow-500' };
+    if (score === 4) return { score, label: 'Good', color: 'bg-blue-500' };
+    return { score, label: 'Strong', color: 'bg-green-500' };
+  };
+
+  const resetChangePassword = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowCurrentPw(false);
+    setShowNewPw(false);
+    setShowConfirmPw(false);
+    setPwError('');
+    setPwSuccess(false);
+    setPwLoading(false);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwError('');
+    setPwSuccess(false);
+
+    // Validate new password strength
     if (newPassword.length < 8) {
-      alert('Password must be at least 8 characters long');
+      setPwError('New password must be at least 8 characters long.');
       return;
     }
-
-    const hasUpperCase = /[A-Z]/.test(newPassword);
-    const hasLowerCase = /[a-z]/.test(newPassword);
-    const hasNumber = /[0-9]/.test(newPassword);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
-
-    if (!hasUpperCase) {
-      alert('Password must contain at least one uppercase letter');
+    if (!/[A-Z]/.test(newPassword)) {
+      setPwError('New password must contain at least one uppercase letter.');
       return;
     }
-    if (!hasLowerCase) {
-      alert('Password must contain at least one lowercase letter');
+    if (!/[a-z]/.test(newPassword)) {
+      setPwError('New password must contain at least one lowercase letter.');
       return;
     }
-    if (!hasNumber) {
-      alert('Password must contain at least one number');
+    if (!/[0-9]/.test(newPassword)) {
+      setPwError('New password must contain at least one number.');
       return;
     }
-    if (!hasSpecialChar) {
-      alert('Password must contain at least one special character (!@#$%^&*)');
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
+      setPwError('New password must contain at least one special character (!@#$%^&*).');
       return;
     }
-
-    const confirmPassword = window.prompt('Confirm new password:');
     if (newPassword !== confirmPassword) {
-      alert('Passwords do not match');
+      setPwError('New password and confirm password do not match.');
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPwError('New password must be different from current password.');
       return;
     }
 
-    api.put('/auth/change-password', { newPassword })
-      .then(() => {
-        alert('Password changed successfully! Please log in again with your new password.');
-      })
-      .catch(err => {
-        console.error(err);
-        alert(err.response?.data?.error || 'Failed to change password');
-      });
+    setPwLoading(true);
+    try {
+      await api.put('/auth/change-password', { currentPassword, newPassword });
+      setPwSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setShowChangePassword(false);
+        resetChangePassword();
+      }, 2000);
+    } catch (err) {
+      setPwError(err.response?.data?.error || 'Failed to change password. Please try again.');
+    } finally {
+      setPwLoading(false);
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -464,13 +520,68 @@ const Dashboard = () => {
               >
                 <Plus size={20} className="mr-2" /> New Document
               </button>
-              <button
-                onClick={logout}
-                className="flex items-center text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-lg hover:bg-gray-100"
-                title="Logout"
-              >
-                <LogOut size={20} />
-              </button>
+
+              {/* Profile Button + Dropdown */}
+              <div className="relative" ref={profileMenuRef}>
+                <button
+                  onClick={() => setShowProfileMenu(prev => !prev)}
+                  className="w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center font-semibold text-sm transition-colors shadow-sm"
+                  title="Profile"
+                >
+                  {user?.name?.charAt(0).toUpperCase()}
+                </button>
+
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                    {/* User info header */}
+                    <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-base flex-shrink-0">
+                        {user?.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                      </div>
+                    </div>
+
+                    {/* Menu items */}
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          setActiveView('settings');
+                        }}
+                        className="w-full flex items-center px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Settings size={16} className="mr-3 text-gray-400" />
+                        Edit Profile
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          resetChangePassword();
+                          setShowChangePassword(true);
+                        }}
+                        className="w-full flex items-center px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <KeyRound size={16} className="mr-3 text-gray-400" />
+                        Change Password
+                      </button>
+
+                      <div className="border-t border-gray-100 my-1" />
+
+                      <button
+                        onClick={() => { setShowProfileMenu(false); logout(); }}
+                        className="w-full flex items-center px-5 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <LogOut size={16} className="mr-3" />
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>
@@ -1312,6 +1423,193 @@ const Dashboard = () => {
           )}
         </main>
       </div>
+
+      {/* ── Change Password Modal ── */}
+      {showChangePassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center space-x-2">
+                <KeyRound size={20} className="text-blue-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Change Password</h2>
+              </div>
+              <button
+                onClick={() => { setShowChangePassword(false); resetChangePassword(); }}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleChangePassword} className="px-6 py-5 space-y-4">
+              {/* Success message */}
+              {pwSuccess && (
+                <div className="flex items-center space-x-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">
+                  <Check size={16} className="flex-shrink-0" />
+                  <span>Password changed successfully!</span>
+                </div>
+              )}
+
+              {/* Error message */}
+              {pwError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 rounded-lg px-4 py-3 text-sm">
+                  {pwError}
+                </div>
+              )}
+
+              {/* Current Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Current Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPw ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    required
+                    placeholder="Enter current password"
+                    className="w-full pr-10 pl-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPw(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* New Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPw ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    required
+                    placeholder="Enter new password"
+                    className="w-full pr-10 pl-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPw(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+
+                {/* Strength bar */}
+                {newPassword && (() => {
+                  const strength = getPasswordStrength(newPassword);
+                  return (
+                    <div className="mt-2">
+                      <div className="flex space-x-1 mb-1">
+                        {[1,2,3,4,5].map(i => (
+                          <div
+                            key={i}
+                            className={`h-1.5 flex-1 rounded-full transition-all ${
+                              i <= strength.score ? strength.color : 'bg-gray-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <p className={`text-xs font-medium ${
+                        strength.score <= 2 ? 'text-red-500' :
+                        strength.score === 3 ? 'text-yellow-600' :
+                        strength.score === 4 ? 'text-blue-600' : 'text-green-600'
+                      }`}>
+                        {strength.label}
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                {/* Requirements checklist */}
+                {newPassword && (
+                  <ul className="mt-2 space-y-1">
+                    {[
+                      { rule: newPassword.length >= 8,           label: 'At least 8 characters' },
+                      { rule: /[A-Z]/.test(newPassword),         label: 'One uppercase letter' },
+                      { rule: /[a-z]/.test(newPassword),         label: 'One lowercase letter' },
+                      { rule: /[0-9]/.test(newPassword),         label: 'One number' },
+                      { rule: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword), label: 'One special character' },
+                    ].map(({ rule, label }) => (
+                      <li key={label} className={`flex items-center space-x-1.5 text-xs ${rule ? 'text-green-600' : 'text-gray-400'}`}>
+                        <Check size={11} className={rule ? 'text-green-500' : 'text-gray-300'} />
+                        <span>{label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPw ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    required
+                    placeholder="Confirm new password"
+                    className={`w-full pr-10 pl-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      confirmPassword && confirmPassword !== newPassword
+                        ? 'border-red-400 bg-red-50'
+                        : confirmPassword && confirmPassword === newPassword
+                        ? 'border-green-400 bg-green-50'
+                        : 'border-gray-300'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPw(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {confirmPassword && confirmPassword !== newPassword && (
+                  <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+                )}
+                {confirmPassword && confirmPassword === newPassword && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center space-x-1">
+                    <Check size={11} /> <span>Passwords match</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowChangePassword(false); resetChangePassword(); }}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pwLoading || pwSuccess}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {pwLoading ? 'Changing...' : pwSuccess ? 'Changed!' : 'Change Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -171,19 +171,28 @@ app.put('/api/auth/profile', authMiddleware, async (req, res) => {
 
 app.put('/api/auth/change-password', authMiddleware, async (req, res) => {
   try {
-    const { newPassword } = req.body;
-    
-    // Validate password length
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    const { currentPassword, newPassword } = req.body;
+
+    // Verify current password
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Current password is required' });
     }
-    
+    const isMatch = await bcrypt.compare(currentPassword, req.user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    // Validate new password length
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters long' });
+    }
+
     // Validate password strength
     const hasUpperCase = /[A-Z]/.test(newPassword);
     const hasLowerCase = /[a-z]/.test(newPassword);
     const hasNumber = /[0-9]/.test(newPassword);
     const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
-    
+
     if (!hasUpperCase) {
       return res.status(400).json({ error: 'Password must contain at least one uppercase letter' });
     }
@@ -196,10 +205,16 @@ app.put('/api/auth/change-password', authMiddleware, async (req, res) => {
     if (!hasSpecialChar) {
       return res.status(400).json({ error: 'Password must contain at least one special character (!@#$%^&*)' });
     }
-    
+
+    // Ensure new password is different from current
+    const isSame = await bcrypt.compare(newPassword, req.user.password);
+    if (isSame) {
+      return res.status(400).json({ error: 'New password must be different from current password' });
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await req.user.update({ password: hashedPassword });
-    
+
     res.json({ message: 'Password changed successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
