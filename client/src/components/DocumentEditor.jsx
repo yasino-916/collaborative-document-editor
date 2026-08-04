@@ -8,7 +8,7 @@ import {
   ArrowLeft, Users, Share2, Save, Check, History, 
   Clock, RotateCcw, Eye, X, Plus, MapPin, 
   MessageSquare, Send, CheckCircle, Trash2, Shield, Edit3, MessageCircle, AlertCircle,
-  ChevronDown, Lock, Search, Download, Upload, Moon, Sun, Keyboard, Wifi, WifiOff, Bell
+  ChevronDown, Lock, Search, Download, Upload, Moon, Sun, Keyboard, Wifi, WifiOff, Bell, Settings
 } from 'lucide-react';
 import QuillCursors from 'quill-cursors';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -81,7 +81,7 @@ const DocumentEditor = () => {
 
   // Google Docs Mode Selector State (EDITING | SUGGESTING | VIEWING)
   const [editorMode, setEditorMode] = useState('EDITING');
-  const [showModeDropdown, setShowModeDropdown] = useState(false);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
 
   // Offline Editing & Network State
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -950,6 +950,12 @@ const DocumentEditor = () => {
                 </span>
               )}
 
+              <span>•</span>
+              <span className={`flex items-center font-medium ${isOnline ? 'text-emerald-500' : 'text-red-500'}`}>
+                {isOnline ? <Wifi size={12} className="mr-1" /> : <WifiOff size={12} className="mr-1" />}
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
+
               {/* Typing indicator */}
               {typingUsers.size > 0 && (
                 <>
@@ -969,11 +975,11 @@ const DocumentEditor = () => {
         {/* Action Controls */}
         <div className="flex items-center space-x-2 sm:space-x-3">
           {/* Backdrop overlay */}
-          {(showModeDropdown || showShare) && (
+          {(showSettingsDropdown || showShare) && (
             <div 
               className="fixed inset-0 z-40 bg-transparent"
               onClick={() => {
-                setShowModeDropdown(false);
+                setShowSettingsDropdown(false);
                 setShowShare(false);
               }}
             />
@@ -985,7 +991,7 @@ const DocumentEditor = () => {
               setShowPresenceDrawer(!showPresenceDrawer); 
               setShowVersionDrawer(false); 
               setShowCommentDrawer(false);
-              setShowModeDropdown(false);
+              setShowSettingsDropdown(false);
               setShowShare(false);
             }}
             className={`flex items-center space-x-2 border px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
@@ -1012,60 +1018,13 @@ const DocumentEditor = () => {
             </div>
           </div>
 
-          {/* Search Button */}
-          <button
-            onClick={() => setShowSearch(!showSearch)}
-            className={`p-2 rounded-lg border text-xs font-semibold flex items-center transition-colors ${
-              showSearch 
-                ? 'bg-blue-100 text-blue-700 border-blue-300' 
-                : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-            }`}
-            title="Search & Replace in Document (Ctrl+F)"
-          >
-            <Search size={15} className="mr-1 text-blue-500" /> Search
-          </button>
-
-          {/* Dark Mode Toggle */}
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className={`p-2 rounded-lg border transition-colors ${
-              isDarkMode ? 'bg-gray-700 border-gray-600 text-yellow-400 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-            }`}
-            title="Toggle Dark / Light Mode (Ctrl+Shift+D)"
-          >
-            {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-
-          {/* Import / Export Menu Dropdown */}
-          <div className="flex items-center space-x-1">
-            <button
-              onClick={handleExportMarkdown}
-              className={`p-2 rounded-lg border text-xs font-medium flex items-center transition-colors ${
-                isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-              }`}
-              title="Export as Markdown (.md)"
-            >
-              <Download size={15} className="mr-1 text-emerald-500" /> Export MD
-            </button>
-
-            <label
-              className={`p-2 rounded-lg border text-xs font-medium flex items-center cursor-pointer transition-colors ${
-                isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-              }`}
-              title="Import Markdown File"
-            >
-              <Upload size={15} className="mr-1 text-blue-500" /> Import MD
-              <input type="file" accept=".md" onChange={handleImportMarkdown} className="hidden" />
-            </label>
-          </div>
-
           {/* Comments Toggle Button */}
           <button
             onClick={() => { 
               setShowCommentDrawer(!showCommentDrawer); 
               setShowVersionDrawer(false); 
               setShowPresenceDrawer(false);
-              setShowModeDropdown(false);
+              setShowSettingsDropdown(false);
               setShowShare(false);
             }}
             className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -1075,7 +1034,7 @@ const DocumentEditor = () => {
             }`}
           >
             <MessageSquare size={16} className="mr-1.5 text-blue-500" />
-            Comments
+            <span className="hidden sm:inline">Comments</span>
           </button>
 
           {/* Version History Toggle Button */}
@@ -1084,7 +1043,7 @@ const DocumentEditor = () => {
               setShowVersionDrawer(!showVersionDrawer); 
               setShowPresenceDrawer(false); 
               setShowCommentDrawer(false);
-              setShowModeDropdown(false);
+              setShowSettingsDropdown(false);
               setShowShare(false);
             }}
             className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -1094,32 +1053,44 @@ const DocumentEditor = () => {
             }`}
           >
             <History size={16} className="mr-1.5 text-purple-500" />
-            History
+            <span className="hidden sm:inline">History</span>
           </button>
 
-          {/* Google Docs Style Mode Switcher Dropdown */}
+          {/* Settings Dropdown */}
           <div className="relative">
             <button
               onClick={() => {
-                setShowModeDropdown(!showModeDropdown);
+                setShowSettingsDropdown(!showSettingsDropdown);
                 setShowShare(false);
               }}
-              className={`flex items-center border px-3 py-1.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${
-                isDarkMode ? 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600' : 'bg-gray-100 border-gray-300 text-gray-800 hover:bg-gray-200'
+              className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center text-sm font-medium ${
+                showSettingsDropdown 
+                ? (isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-gray-100 border-gray-300 text-gray-900')
+                : (isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50')
               }`}
-              title="Change Editor Mode"
+              title="Settings & Tools"
             >
-              {currentModeInfo.icon}
-              <span>{currentModeInfo.label}</span>
-              <ChevronDown size={15} className="ml-1.5 text-gray-400" />
+              <Settings size={16} className="mr-1 sm:mr-1.5" />
+              <span className="hidden sm:inline mr-1">Settings</span>
+              <ChevronDown size={14} className="text-gray-400" />
             </button>
 
-            {showModeDropdown && (
+            {showSettingsDropdown && (
               <div className={`absolute right-0 mt-2 w-72 rounded-2xl shadow-2xl border p-2 z-[100] animate-in fade-in slide-in-from-top-2 ${
                 isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-100 text-gray-900'
               }`}>
+                
+                {/* Network Status */}
+                <div className="px-3 py-2 flex items-center justify-between border-b border-gray-500/20 mb-2">
+                  <span className="text-xs font-semibold text-gray-500 uppercase">Network</span>
+                  <span className={`flex items-center text-[11px] font-bold ${isOnline ? 'text-emerald-500' : 'text-red-500'}`}>
+                    {isOnline ? <Wifi size={12} className="mr-1" /> : <WifiOff size={12} className="mr-1" />}
+                    {isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+
                 <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                  Select Editing Mode
+                  Editing Mode
                 </div>
 
                 {/* Editing Option */}
@@ -1127,12 +1098,11 @@ const DocumentEditor = () => {
                   onClick={() => {
                     if (userRole === 'OWNER' || userRole === 'EDITOR') {
                       setEditorMode('EDITING');
-                      setShowModeDropdown(false);
                     }
                   }}
                   disabled={userRole !== 'OWNER' && userRole !== 'EDITOR'}
                   className={`w-full text-left p-2.5 rounded-xl flex items-start space-x-3 transition-colors ${
-                    editorMode === 'EDITING' ? 'bg-blue-500/10 border border-blue-500/30' : 'hover:bg-gray-500/10'
+                    editorMode === 'EDITING' ? 'bg-blue-500/10 border border-blue-500/30' : 'hover:bg-gray-500/10 border border-transparent'
                   } ${(userRole !== 'OWNER' && userRole !== 'EDITOR') ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <Edit3 size={18} className="text-blue-500 mt-0.5 flex-shrink-0" />
@@ -1140,9 +1110,7 @@ const DocumentEditor = () => {
                     <div className="font-semibold text-xs flex justify-between items-center">
                       <span>Editing</span>
                       {editorMode === 'EDITING' && <Check size={14} className="text-blue-500 font-bold" />}
-                      {(userRole !== 'OWNER' && userRole !== 'EDITOR') && <Lock size={12} className="text-gray-400" />}
                     </div>
-                    <div className="text-[11px] text-gray-400 mt-0.5">Edit document directly</div>
                   </div>
                 </button>
 
@@ -1151,12 +1119,11 @@ const DocumentEditor = () => {
                   onClick={() => {
                     if (userRole !== 'VIEWER') {
                       setEditorMode('SUGGESTING');
-                      setShowModeDropdown(false);
                     }
                   }}
                   disabled={userRole === 'VIEWER'}
-                  className={`w-full text-left p-2.5 rounded-xl flex items-start space-x-3 transition-colors ${
-                    editorMode === 'SUGGESTING' ? 'bg-amber-500/10 border border-amber-500/30' : 'hover:bg-gray-500/10'
+                  className={`w-full text-left p-2.5 rounded-xl flex items-start space-x-3 transition-colors mt-1 ${
+                    editorMode === 'SUGGESTING' ? 'bg-amber-500/10 border border-amber-500/30' : 'hover:bg-gray-500/10 border border-transparent'
                   } ${userRole === 'VIEWER' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <MessageSquare size={18} className="text-amber-500 mt-0.5 flex-shrink-0" />
@@ -1164,9 +1131,7 @@ const DocumentEditor = () => {
                     <div className="font-semibold text-xs flex justify-between items-center">
                       <span>Suggesting</span>
                       {editorMode === 'SUGGESTING' && <Check size={14} className="text-amber-500 font-bold" />}
-                      {userRole === 'VIEWER' && <Lock size={12} className="text-gray-400" />}
                     </div>
-                    <div className="text-[11px] text-gray-400 mt-0.5">Edits become comments & suggestions</div>
                   </div>
                 </button>
 
@@ -1174,10 +1139,9 @@ const DocumentEditor = () => {
                 <button
                   onClick={() => {
                     setEditorMode('VIEWING');
-                    setShowModeDropdown(false);
                   }}
-                  className={`w-full text-left p-2.5 rounded-xl flex items-start space-x-3 transition-colors ${
-                    editorMode === 'VIEWING' ? 'bg-gray-500/20 border border-gray-500/30' : 'hover:bg-gray-500/10'
+                  className={`w-full text-left p-2.5 rounded-xl flex items-start space-x-3 transition-colors mt-1 ${
+                    editorMode === 'VIEWING' ? 'bg-gray-500/20 border border-gray-500/30' : 'hover:bg-gray-500/10 border border-transparent'
                   } cursor-pointer`}
                 >
                   <Eye size={18} className="text-gray-400 mt-0.5 flex-shrink-0" />
@@ -1186,23 +1150,56 @@ const DocumentEditor = () => {
                       <span>Viewing</span>
                       {editorMode === 'VIEWING' && <Check size={14} className="font-bold" />}
                     </div>
-                    <div className="text-[11px] text-gray-400 mt-0.5">Read or print final document</div>
                   </div>
                 </button>
+
+                <div className="my-2 border-t border-gray-500/20"></div>
+
+                {/* Other Actions */}
+                <div className="space-y-1">
+                  <button
+                    onClick={() => { setShowSearch(!showSearch); setShowSettingsDropdown(false); }}
+                    className="w-full text-left p-2 flex items-center rounded-lg hover:bg-gray-500/10 text-xs font-medium"
+                  >
+                    <Search size={14} className="mr-2 text-blue-500" /> Search & Replace
+                  </button>
+
+                  <button
+                    onClick={() => { setIsDarkMode(!isDarkMode); }}
+                    className="w-full text-left p-2 flex items-center justify-between rounded-lg hover:bg-gray-500/10 text-xs font-medium"
+                  >
+                    <div className="flex items-center">
+                      {isDarkMode ? <Sun size={14} className="mr-2 text-yellow-400" /> : <Moon size={14} className="mr-2 text-gray-500" />}
+                      Dark Mode
+                    </div>
+                    {/* Tiny toggle visual */}
+                    <div className={`w-7 h-4 rounded-full flex items-center px-0.5 transition-colors ${isDarkMode ? 'bg-emerald-500 justify-end' : 'bg-gray-400 justify-start'}`}>
+                      <div className="w-3 h-3 bg-white rounded-full shadow-sm"></div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => { handleExportMarkdown(); setShowSettingsDropdown(false); }}
+                    className="w-full text-left p-2 flex items-center rounded-lg hover:bg-gray-500/10 text-xs font-medium"
+                  >
+                    <Download size={14} className="mr-2 text-emerald-500" /> Export as Markdown
+                  </button>
+
+                  <label className="w-full cursor-pointer p-2 flex items-center rounded-lg hover:bg-gray-500/10 text-xs font-medium">
+                    <Upload size={14} className="mr-2 text-blue-500" /> Import Markdown File
+                    <input type="file" accept=".md" onChange={(e) => { handleImportMarkdown(e); setShowSettingsDropdown(false); }} className="hidden" />
+                  </label>
+
+                  <button
+                    onClick={() => { setShowShortcutsModal(true); setShowSettingsDropdown(false); }}
+                    className="w-full text-left p-2 flex items-center rounded-lg hover:bg-gray-500/10 text-xs font-medium"
+                  >
+                    <Keyboard size={14} className="mr-2 text-purple-500" /> Keyboard Shortcuts
+                  </button>
+                </div>
               </div>
             )}
           </div>
-
-          {/* Shortcuts Help Icon */}
-          <button
-            onClick={() => setShowShortcutsModal(true)}
-            className={`p-2 rounded-lg border transition-colors ${
-              isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-            }`}
-            title="Keyboard Shortcuts (?)"
-          >
-            <Keyboard size={16} />
-          </button>
 
           {/* Share & Permissions Button */}
           <div className="relative">
