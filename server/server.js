@@ -445,7 +445,7 @@ app.post('/api/documents/:id/invite', authMiddleware, async (req, res) => {
 
     res.json({ message: `Invitation sent to ${invitee.name}.`, invitation: fullInvitation });
   } catch (err) {
-    console.error('[INVITE ERROR]', err);
+    console.error('[INVITE ERROR]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1036,6 +1036,7 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3001;
 
+// alter:true ensures any new tables/columns (like Invitations) are created automatically
 sequelize.sync({ alter: true }).then(() => {
   server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
