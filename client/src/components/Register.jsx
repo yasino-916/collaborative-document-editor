@@ -40,7 +40,7 @@ const Register = () => {
     setLoading(true);
     try {
       await register(name, email, password);
-      navigate('/');
+      navigate('/login');
     } catch (err) {
       const errorMsg =
         err.response?.data?.error ||
