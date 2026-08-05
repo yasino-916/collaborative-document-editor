@@ -329,6 +329,9 @@ app.delete('/api/documents/:id', authMiddleware, async (req, res) => {
 });
 
 // Sharing & Collaborators Management
+// NOTE: This route only handles role updates for EXISTING collaborators.
+// New shares must go through POST /api/documents/:id/invite so the invitee
+// can accept or reject before the document appears in their list.
 app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
   try {
     const { email, role } = req.body;
@@ -345,26 +348,31 @@ app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
     if (userToShare.id === document.ownerId)
       return res.status(400).json({ error: 'Cannot share with document owner' });
 
-    let collab = await Collaborator.findOne({ where: { documentId: document.id, userId: userToShare.id } });
-    let isNewShare = false;
+    // Only allow updating an EXISTING collaborator's role via this route.
+    // New collaborators must be added through the invite flow.
+    const collab = await Collaborator.findOne({
+      where: { documentId: document.id, userId: userToShare.id }
+    });
 
-    if (collab) {
-      collab.role = targetRole;
-      await collab.save();
-    } else {
-      collab = await Collaborator.create({ documentId: document.id, userId: userToShare.id, role: targetRole });
-      isNewShare = true;
+    if (!collab) {
+      return res.status(400).json({
+        error: 'This user has not accepted an invitation yet. Use the invite flow to add new collaborators.'
+      });
     }
 
+    collab.role = targetRole;
+    await collab.save();
+
+    // Notify the collaborator their role was updated
     io.emit('documentShared', {
       userId: userToShare.id,
       document: { id: document.id, title: document.title, Owner: { name: req.user.name, email: req.user.email } },
       sharedBy: req.user.name,
       role: targetRole,
-      isNewShare
+      isNewShare: false
     });
 
-    res.json({ message: `Shared successfully with ${userToShare.name} as ${targetRole}`, collab });
+    res.json({ message: `Role updated for ${userToShare.name} to ${targetRole}`, collab });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -388,19 +396,21 @@ app.post('/api/documents/:id/invite', authMiddleware, async (req, res) => {
     if (invitee.id === document.ownerId)
       return res.status(400).json({ error: 'Cannot invite the document owner.' });
 
-    // If already a collaborator, just update role instead
+    // If already a collaborator, just update role directly — no invite needed
     const existingCollab = await Collaborator.findOne({
       where: { documentId: document.id, userId: invitee.id }
     });
     if (existingCollab) {
       existingCollab.role = targetRole;
       await existingCollab.save();
-      io.emit('documentShared', {
+      // Notify the collaborator their role changed (not a new share)
+      io.emit('invitation-responded', {
         userId: invitee.id,
-        document: { id: document.id, title: document.title, Owner: { name: req.user.name, email: req.user.email } },
-        sharedBy: req.user.name,
-        role: targetRole,
-        isNewShare: false
+        inviteeName: invitee.name,
+        documentTitle: document.title,
+        documentId: document.id,
+        action: 'ROLE_UPDATED',
+        role: targetRole
       });
       return res.json({ message: `${invitee.name} is already a collaborator. Role updated to ${targetRole}.` });
     }
