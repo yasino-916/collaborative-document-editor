@@ -5,9 +5,10 @@ import { io } from 'socket.io-client';
 import {
   FileText, Plus, LogOut, Trash2, Edit2, Copy, Menu, X,
   Users, Clock, Settings, HelpCircle, FolderOpen, HardDrive,
-  Sheet, Presentation, Video, ClipboardList, KeyRound, Eye, EyeOff, Check
+  Sheet, Presentation, Video, ClipboardList, KeyRound, Eye, EyeOff, Check,
+  Bell, CheckCircle, XCircle, FileEdit
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { validatePassword } from '../utils/validatePassword';
 
 const Dashboard = () => {
@@ -25,13 +26,17 @@ const Dashboard = () => {
   const [editingEmail, setEditingEmail] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const [emailValue, setEmailValue] = useState('');
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [desktopNotifications, setDesktopNotifications] = useState(false);
-  const [autoSave, setAutoSave] = useState(true);
 
   // Profile dropdown state
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notification, setNotification] = useState(null);
+
+  // ── Invitation & notification state ──────────────────────────────────────
+  const [invitations, setInvitations] = useState([]);
+  const [showBell, setShowBell] = useState(false);
+  // Toast stack for document-change + invitation-responded alerts
+  const [toasts, setToasts] = useState([]);
+  const bellRef = useRef(null);
 
   // Edit profile modal state
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -63,28 +68,89 @@ const Dashboard = () => {
     }
   }, [api]);
 
+  const fetchInvitations = useCallback(async () => {
+    try {
+      const res = await api.get('/invitations');
+      setInvitations(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [api]);
+
+  const addToast = useCallback((type, message) => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev.slice(-4), { id, type, message }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 6000);
+  }, []);
+
+  const respondToInvitation = async (invitationId, action) => {
+    try {
+      await api.put(`/invitations/${invitationId}/respond`, { action });
+      setInvitations(prev => prev.filter(i => i.id !== invitationId));
+      if (action === 'ACCEPTED') {
+        fetchDocs();
+        addToast('success', 'Invitation accepted! The document is now in your shared docs.');
+      } else {
+        addToast('info', 'Invitation declined.');
+      }
+    } catch (err) {
+      addToast('error', err.response?.data?.error || 'Failed to respond to invitation.');
+    }
+  };
+
   useEffect(() => {
     fetchDocs();
+    fetchInvitations();
     // Initialize settings values from user
     if (user) {
       setNameValue(user.name || '');
       setEmailValue(user.email || '');
     }
-  }, [user, fetchDocs]);
+  }, [user, fetchDocs, fetchInvitations]);
 
-  // Socket connection for real-time share notifications
+  // Socket connection for real-time notifications
   useEffect(() => {
     if (!user) return;
 
     const s = io('http://localhost:3001');
     socketRef.current = s;
 
+    // Someone shared a doc with us (immediate share, no invite flow)
     s.on('documentShared', (data) => {
       if (data.userId === user.id) {
         fetchDocs();
-        const msg = `${data.sharedBy} shared "${data.document.title}" with you as ${data.role}`;
-        setNotification(msg);
-        setTimeout(() => setNotification(null), 5000);
+        addToast('success', `${data.sharedBy} shared "${data.document.title}" with you as ${data.role}`);
+      }
+    });
+
+    // A new invitation arrived for this user
+    s.on('invitation-received', (data) => {
+      if (data.userId === user.id) {
+        setInvitations(prev => {
+          // avoid duplicates
+          const exists = prev.some(i => i.id === data.invitation.id);
+          return exists ? prev : [data.invitation, ...prev];
+        });
+        addToast('info', `${data.invitation.Inviter?.name} invited you to "${data.invitation.Document?.title}"`);
+      }
+    });
+
+    // Someone responded to an invite we sent
+    s.on('invitation-responded', (data) => {
+      if (data.userId === user.id) {
+        if (data.action === 'ACCEPTED') {
+          addToast('success', `${data.inviteeName} accepted your invitation to "${data.documentTitle}"`);
+          fetchDocs();
+        } else {
+          addToast('info', `${data.inviteeName} declined your invitation to "${data.documentTitle}"`);
+        }
+      }
+    });
+
+    // A collaborator saved changes to a document we have access to
+    s.on('document-changed', (data) => {
+      if (data.userId === user.id) {
+        addToast('edit', `${data.changedBy.name} made changes to "${data.documentTitle}"`);
       }
     });
 
@@ -92,7 +158,7 @@ const Dashboard = () => {
       s.disconnect();
       socketRef.current = null;
     };
-  }, [user, fetchDocs]);
+  }, [user, fetchDocs, addToast]);
 
   // createDoc is a convenience alias for creating a plain document
   const createDoc = () => createItem('Untitled Document', 'doc');
@@ -177,11 +243,14 @@ const Dashboard = () => {
     }
   };
 
-  // Close profile menu when clicking outside
+  // Close profile menu and bell when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
         setShowProfileMenu(false);
+      }
+      if (bellRef.current && !bellRef.current.contains(e.target)) {
+        setShowBell(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -273,10 +342,6 @@ const Dashboard = () => {
         console.error(err);
         alert('Failed to delete account');
       });
-  };
-
-  const handleManageStorage = () => {
-    alert('Storage management feature coming soon!\n\nCurrent usage: 2.4 GB of 15 GB (16%)');
   };
 
   const handleSaveProfile = async (e) => {
@@ -385,9 +450,32 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Share notification toast */}
+      {/* ── Toast notification stack ── */}
+      <div className="fixed bottom-5 right-5 z-[300] flex flex-col space-y-2 max-w-sm pointer-events-none">
+        {toasts.map(t => (
+          <div
+            key={t.id}
+            className={`flex items-start space-x-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium pointer-events-auto animate-in fade-in slide-in-from-bottom-2 ${
+              t.type === 'success' ? 'bg-emerald-600 text-white' :
+              t.type === 'error'   ? 'bg-red-600 text-white' :
+              t.type === 'edit'    ? 'bg-purple-600 text-white' :
+                                     'bg-blue-600 text-white'
+            }`}
+          >
+            {t.type === 'success' ? <CheckCircle size={16} className="flex-shrink-0 mt-0.5" /> :
+             t.type === 'edit'    ? <FileEdit size={16} className="flex-shrink-0 mt-0.5" /> :
+                                    <Bell size={16} className="flex-shrink-0 mt-0.5" />}
+            <span className="flex-1">{t.message}</span>
+            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="opacity-70 hover:opacity-100 ml-1">
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Legacy single notification (kept for compatibility) ── */}
       {notification && (
-        <div className="fixed top-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center space-x-3 animate-in fade-in slide-in-from-top-2">
+        <div className="fixed top-4 right-4 z-50 bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center space-x-3">
           <Users size={16} className="flex-shrink-0" />
           <span>{notification}</span>
           <button onClick={() => setNotification(null)} className="ml-2 text-white/80 hover:text-white">
@@ -514,13 +602,15 @@ const Dashboard = () => {
         <header className="bg-white shadow-sm sticky top-0 z-10 border-b border-gray-200">
           <div className="px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center gap-3">
             <div className="flex items-center space-x-3 min-w-0">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
-                title="Toggle sidebar"
-              >
-                <Menu size={22} />
-              </button>
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
+                  title="Open sidebar"
+                >
+                  <Menu size={22} />
+                </button>
+              )}
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 {activeView === 'docs' && 'My Documents'}
                 {activeView === 'sheets' && 'Sheets'}
@@ -547,6 +637,109 @@ const Dashboard = () => {
                 <Plus size={20} className="sm:mr-2" />
                 <span className="hidden sm:inline">New Document</span>
               </button>
+
+              {/* Bell / Invitations Button */}
+              <div className="relative" ref={bellRef}>
+                <button
+                  onClick={() => { setShowBell(prev => !prev); setShowProfileMenu(false); }}
+                  className="relative w-9 h-9 flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 transition-colors"
+                  title="Invitations & Notifications"
+                >
+                  <Bell size={20} />
+                  {invitations.length > 0 && (
+                    <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                      {invitations.length > 9 ? '9+' : invitations.length}
+                    </span>
+                  )}
+                </button>
+
+                {showBell && (
+                  <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                      <span className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                        <Bell size={15} className="text-blue-500" />
+                        Invitations
+                        {invitations.length > 0 && (
+                          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {invitations.length}
+                          </span>
+                        )}
+                      </span>
+                      <button onClick={() => setShowBell(false)} className="text-gray-400 hover:text-gray-600">
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    <div className="max-h-96 overflow-y-auto divide-y divide-gray-100">
+                      {invitations.length === 0 ? (
+                        <div className="px-4 py-8 text-center text-gray-400 text-sm">
+                          <Bell size={32} className="mx-auto mb-2 text-gray-300" />
+                          No pending invitations
+                        </div>
+                      ) : (
+                        invitations.map(inv => (
+                          <div key={inv.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                            {/* Inviter info */}
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                {inv.Inviter?.name?.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-gray-900 truncate">
+                                  {inv.Inviter?.name}
+                                  <span className="font-normal text-gray-500"> invited you</span>
+                                </p>
+                                <p className="text-[11px] text-gray-400">
+                                  {formatDistanceToNow(new Date(inv.createdAt), { addSuffix: true })}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Document + role */}
+                            <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
+                              <div className="flex items-center gap-2">
+                                <FileText size={14} className="text-blue-500 flex-shrink-0" />
+                                <span className="text-xs font-semibold text-gray-800 truncate">
+                                  {inv.Document?.title}
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center gap-1">
+                                <span className="text-[11px] text-gray-500">Role:</span>
+                                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+                                  inv.role === 'EDITOR'    ? 'bg-emerald-100 text-emerald-700' :
+                                  inv.role === 'COMMENTER' ? 'bg-amber-100 text-amber-700' :
+                                                              'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {inv.role}
+                                </span>
+                              </div>
+                              {inv.message && (
+                                <p className="mt-1 text-[11px] text-gray-500 italic">"{inv.message}"</p>
+                              )}
+                            </div>
+
+                            {/* Accept / Reject buttons */}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => respondToInvitation(inv.id, 'ACCEPTED')}
+                                className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-1.5 rounded-lg transition-colors"
+                              >
+                                <CheckCircle size={13} /> Accept
+                              </button>
+                              <button
+                                onClick={() => respondToInvitation(inv.id, 'REJECTED')}
+                                className="flex-1 flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-600 text-xs font-semibold py-1.5 rounded-lg border border-gray-200 hover:border-red-200 transition-colors"
+                              >
+                                <XCircle size={13} /> Decline
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Profile Button + Dropdown */}
               <div className="relative" ref={profileMenuRef}>
@@ -1192,73 +1385,6 @@ const Dashboard = () => {
                       )}
                     </div>
                   </div>
-                </div>
-
-                {/* Preferences */}
-                <div className="p-8 border-b border-gray-200">
-                  <h3 className="text-base font-normal text-gray-900 mb-6">Preferences</h3>
-                  <div className="space-y-4">
-                    <label className="flex items-center justify-between cursor-pointer group">
-                      <span className="text-sm text-gray-700">Email notifications</span>
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                        checked={emailNotifications}
-                        onChange={(e) => {
-                          setEmailNotifications(e.target.checked);
-                          // Save preference to localStorage or API
-                          localStorage.setItem('emailNotifications', e.target.checked);
-                        }}
-                      />
-                    </label>
-                    <label className="flex items-center justify-between cursor-pointer group">
-                      <span className="text-sm text-gray-700">Desktop notifications</span>
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                        checked={desktopNotifications}
-                        onChange={(e) => {
-                          setDesktopNotifications(e.target.checked);
-                          localStorage.setItem('desktopNotifications', e.target.checked);
-                          if (e.target.checked && 'Notification' in window) {
-                            Notification.requestPermission();
-                          }
-                        }}
-                      />
-                    </label>
-                    <label className="flex items-center justify-between cursor-pointer group">
-                      <span className="text-sm text-gray-700">Auto-save documents</span>
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                        checked={autoSave}
-                        onChange={(e) => {
-                          setAutoSave(e.target.checked);
-                          localStorage.setItem('autoSave', e.target.checked);
-                        }}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                {/* Storage */}
-                <div className="p-8 border-b border-gray-200">
-                  <h3 className="text-base font-normal text-gray-900 mb-4">Storage</h3>
-                  <div className="mb-3">
-                    <div className="flex justify-between text-sm text-gray-600 mb-2">
-                      <span>Used: 2.4 GB of 15 GB</span>
-                      <span className="text-gray-500">16% full</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                      <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{ width: '16%' }}></div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleManageStorage}
-                    className="text-sm text-blue-600 hover:underline font-normal mt-2"
-                  >
-                    Manage storage
-                  </button>
                 </div>
 
                 {/* Account Actions */}
