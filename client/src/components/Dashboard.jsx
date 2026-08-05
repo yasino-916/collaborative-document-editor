@@ -115,11 +115,10 @@ const Dashboard = () => {
     const s = io('http://localhost:3001');
     socketRef.current = s;
 
-    // Someone shared a doc with us (immediate share, no invite flow)
+    // Role updated on an existing collaboration (NOT a new share — no fetchDocs here)
     s.on('documentShared', (data) => {
-      if (data.userId === user.id) {
-        fetchDocs();
-        addToast('success', `${data.sharedBy} shared "${data.document.title}" with you as ${data.role}`);
+      if (data.userId === user.id && !data.isNewShare) {
+        addToast('info', `Your role on "${data.document.title}" was updated to ${data.role} by ${data.sharedBy}`);
       }
     });
 
@@ -127,7 +126,6 @@ const Dashboard = () => {
     s.on('invitation-received', (data) => {
       if (data.userId === user.id) {
         setInvitations(prev => {
-          // avoid duplicates
           const exists = prev.some(i => i.id === data.invitation.id);
           return exists ? prev : [data.invitation, ...prev];
         });
@@ -135,14 +133,16 @@ const Dashboard = () => {
       }
     });
 
-    // Someone responded to an invite we sent
+    // Someone responded to an invite we sent, or their role was updated
     s.on('invitation-responded', (data) => {
       if (data.userId === user.id) {
         if (data.action === 'ACCEPTED') {
           addToast('success', `${data.inviteeName} accepted your invitation to "${data.documentTitle}"`);
-          fetchDocs();
-        } else {
+          fetchDocs(); // safe — collaborator row now exists
+        } else if (data.action === 'REJECTED') {
           addToast('info', `${data.inviteeName} declined your invitation to "${data.documentTitle}"`);
+        } else if (data.action === 'ROLE_UPDATED') {
+          addToast('info', `Your role on "${data.documentTitle}" was updated to ${data.role}`);
         }
       }
     });
@@ -159,6 +159,19 @@ const Dashboard = () => {
       socketRef.current = null;
     };
   }, [user, fetchDocs, addToast]);
+
+  // Auto-refresh: re-fetch docs & invitations whenever the user returns to this tab
+  useEffect(() => {
+    if (!user) return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDocs();
+        fetchInvitations();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user, fetchDocs, fetchInvitations]);
 
   // createDoc is a convenience alias for creating a plain document
   const createDoc = () => createItem('Untitled Document', 'doc');
