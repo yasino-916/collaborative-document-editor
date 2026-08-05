@@ -932,19 +932,18 @@ const DocumentEditor = () => {
         </div>
       )}
 
-      {/* Search & Replace Floating Bar */}
       {showSearch && (
-        <div className={`px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3 z-40 animate-in slide-in-from-top-2 ${
+        <div className={`px-3 sm:px-4 py-3 border-b flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 z-40 animate-in slide-in-from-top-2 ${
           isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-blue-50 border-blue-200'
         }`}>
-          <div className="flex items-center space-x-2 flex-1 max-w-md">
+          <div className="flex items-center space-x-2 w-full sm:flex-1 sm:max-w-md">
             <Search size={16} className="text-blue-500 flex-shrink-0" />
             <input
               type="text"
               placeholder="Find in document..."
               value={searchQuery}
               onChange={handleSearch}
-              className={`w-full p-1.5 text-xs rounded-lg border outline-none ${
+              className={`flex-1 p-1.5 text-xs rounded-lg border outline-none min-w-0 ${
                 isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
               }`}
             />
@@ -955,7 +954,7 @@ const DocumentEditor = () => {
             )}
             <button
               onClick={handleNextMatch}
-              className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs"
+              className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs whitespace-nowrap"
               title="Next Match"
             >
               Next
@@ -963,45 +962,46 @@ const DocumentEditor = () => {
           </div>
 
           {(userRole === 'OWNER' || userRole === 'EDITOR') && (
-            <div className="flex items-center space-x-2 flex-1 max-w-md">
+            <div className="flex items-center space-x-2 w-full sm:flex-1 sm:max-w-md">
               <input
                 type="text"
                 placeholder="Replace with..."
                 value={replaceQuery}
                 onChange={e => setReplaceQuery(e.target.value)}
-                className={`w-full p-1.5 text-xs rounded-lg border outline-none ${
+                className={`flex-1 p-1.5 text-xs rounded-lg border outline-none min-w-0 ${
                   isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
                 }`}
               />
               <button
                 onClick={handleReplace}
-                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium"
+                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium whitespace-nowrap"
               >
                 Replace
               </button>
               <button
                 onClick={handleReplaceAll}
-                className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium"
+                className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium whitespace-nowrap"
               >
-                Replace All
+                All
               </button>
             </div>
           )}
 
-          <button onClick={() => setShowSearch(false)} className="text-gray-400 hover:text-gray-600 p-1">
+          <button onClick={() => setShowSearch(false)} className="text-gray-400 hover:text-gray-600 p-1 self-start sm:self-auto">
             <X size={18} />
           </button>
         </div>
       )}
 
       {/* Top Header */}
-      <header className={`shadow-sm border-b px-4 py-2 flex items-center justify-between z-50 relative ${
+      <header className={`shadow-sm border-b px-3 sm:px-4 py-2 flex items-center justify-between z-50 relative gap-2 ${
         isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
       }`}>
-        <div className="flex items-center space-x-4">
+        {/* Left: back + title */}
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
           <button 
             onClick={() => navigate('/')} 
-            className={`p-2 rounded-lg transition-colors ${
+            className={`p-2 rounded-lg transition-colors flex-shrink-0 ${
               isDarkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}
             title="Back to Dashboard"
@@ -1009,62 +1009,61 @@ const DocumentEditor = () => {
             <ArrowLeft size={18} />
           </button>
 
-          <div className="flex flex-col">
-            <div className="flex items-center space-x-2">
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center space-x-2 min-w-0">
               <input 
                 type="text" 
                 disabled={userRole !== 'OWNER' && userRole !== 'EDITOR'}
-                className={`text-lg font-semibold border-b border-transparent focus:border-blue-500 bg-transparent focus:outline-none px-1.5 py-0.5 rounded transition-all ${
+                className={`text-base sm:text-lg font-semibold border-b border-transparent focus:border-blue-500 bg-transparent focus:outline-none px-1.5 py-0.5 rounded transition-all min-w-0 w-24 sm:w-40 md:w-auto ${
                   isDarkMode ? 'text-white' : 'text-gray-900'
                 } ${(userRole === 'OWNER' || userRole === 'EDITOR') ? 'hover:bg-gray-50/10' : 'cursor-not-allowed'}`}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onBlur={handleTitleBlur}
               />
-              {getRoleBadge(userRole)}
+              <span className="flex-shrink-0">{getRoleBadge(userRole)}</span>
             </div>
             
-            <div className="flex items-center text-xs px-1.5 mt-0.5 space-x-2 text-gray-400">
+            <div className="flex items-center text-xs px-1.5 mt-0.5 space-x-1 sm:space-x-2 text-gray-400">
               {(userRole === 'OWNER' || userRole === 'EDITOR') && editorMode === 'EDITING' ? (
                 saving ? (
                   <span className="flex items-center text-amber-500 font-medium">
-                    <Save size={12} className="mr-1 animate-pulse" /> Saving changes...
+                    <Save size={12} className="mr-1 animate-pulse" /> <span className="hidden sm:inline">Saving changes...</span><span className="sm:hidden">Saving...</span>
                   </span>
                 ) : (
                   <span className="flex items-center text-emerald-500 font-medium">
-                    <Check size={12} className="mr-1" /> Saved to cloud
+                    <Check size={12} className="mr-1" /> <span className="hidden sm:inline">Saved to cloud</span><span className="sm:hidden">Saved</span>
                   </span>
                 )
               ) : (
                 <span className="flex items-center text-gray-400 font-medium">
-                  {editorMode === 'SUGGESTING' ? 'Suggesting Mode' : 'Read-Only Mode'}
+                  {editorMode === 'SUGGESTING' ? 'Suggesting' : 'Read-Only'}
                 </span>
               )}
 
-              <span>•</span>
-              <span className={`flex items-center font-medium ${isOnline ? 'text-emerald-500' : 'text-red-500'}`}>
+              <span className="hidden sm:inline">•</span>
+              <span className={`hidden sm:flex items-center font-medium ${isOnline ? 'text-emerald-500' : 'text-red-500'}`}>
                 {isOnline ? <Wifi size={12} className="mr-1" /> : <WifiOff size={12} className="mr-1" />}
                 {isOnline ? 'Online' : 'Offline'}
               </span>
 
-              {/* Typing indicator */}
               {typingUsers.size > 0 && (
                 <>
-                  <span>•</span>
-                  <span className="text-blue-500 font-semibold animate-pulse">
+                  <span className="hidden md:inline">•</span>
+                  <span className="text-blue-500 font-semibold animate-pulse hidden md:inline">
                     {Array.from(typingUsers).join(', ')} is typing...
                   </span>
                 </>
               )}
 
-              <span>•</span>
-              <span>By {documentInfo.Owner?.name}</span>
+              <span className="hidden lg:inline">•</span>
+              <span className="hidden lg:inline">By {documentInfo.Owner?.name}</span>
             </div>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
+        {/* Right: action controls */}
+        <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
           {/* Backdrop overlay */}
           {(showSettingsDropdown || showShare) && (
             <div 
@@ -1085,7 +1084,7 @@ const DocumentEditor = () => {
               setShowSettingsDropdown(false);
               setShowShare(false);
             }}
-            className={`flex items-center space-x-2 border px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
+            className={`flex items-center space-x-1 sm:space-x-2 border px-2 sm:px-3 py-1.5 rounded-lg cursor-pointer transition-colors ${
               isDarkMode ? 'bg-gray-700 border-gray-600 hover:bg-gray-600' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
             }`}
             title="Active Collaborators Presence"
@@ -1094,18 +1093,19 @@ const DocumentEditor = () => {
               {activeUsers.map((u) => (
                 <div key={u.id} className="relative group">
                   <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow-sm"
+                    className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow-sm"
                     style={{ backgroundColor: u.color }}
                   >
                     {u.name.charAt(0).toUpperCase()}
                   </div>
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+                  <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 border-2 border-white rounded-full"></span>
                 </div>
               ))}
             </div>
             <div className="flex items-center text-xs font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
-              {activeUsers.length} Online
+              <span className="hidden sm:inline">{activeUsers.length} Online</span>
+              <span className="sm:hidden">{activeUsers.length}</span>
             </div>
           </div>
 
@@ -1118,14 +1118,14 @@ const DocumentEditor = () => {
               setShowSettingsDropdown(false);
               setShowShare(false);
             }}
-            className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+            className={`flex items-center px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
               showCommentDrawer 
                 ? 'bg-blue-100 text-blue-700 border-blue-300' 
                 : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            <MessageSquare size={16} className="mr-1.5 text-blue-500" />
-            <span className="hidden sm:inline">Comments</span>
+            <MessageSquare size={16} className="text-blue-500" />
+            <span className="hidden md:inline ml-1.5">Comments</span>
           </button>
 
           {/* Version History Toggle Button */}
@@ -1137,14 +1137,14 @@ const DocumentEditor = () => {
               setShowSettingsDropdown(false);
               setShowShare(false);
             }}
-            className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+            className={`flex items-center px-2 sm:px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
               showVersionDrawer 
                 ? 'bg-purple-100 text-purple-700 border-purple-300' 
                 : isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            <History size={16} className="mr-1.5 text-purple-500" />
-            <span className="hidden sm:inline">History</span>
+            <History size={16} className="text-purple-500" />
+            <span className="hidden md:inline ml-1.5">History</span>
           </button>
 
           {/* Settings Dropdown */}
@@ -1154,16 +1154,16 @@ const DocumentEditor = () => {
                 setShowSettingsDropdown(!showSettingsDropdown);
                 setShowShare(false);
               }}
-              className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center text-sm font-medium ${
+              className={`px-2 sm:px-3 py-1.5 rounded-lg border transition-colors flex items-center text-sm font-medium ${
                 showSettingsDropdown 
                 ? (isDarkMode ? 'bg-gray-600 border-gray-500 text-white' : 'bg-gray-100 border-gray-300 text-gray-900')
                 : (isDarkMode ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50')
               }`}
               title="Settings & Tools"
             >
-              <Settings size={16} className="mr-1 sm:mr-1.5" />
-              <span className="hidden sm:inline mr-1">Settings</span>
-              <ChevronDown size={14} className="text-gray-400" />
+              <Settings size={16} />
+              <span className="hidden lg:inline ml-1">Settings</span>
+              <ChevronDown size={14} className="text-gray-400 ml-1 hidden sm:inline" />
             </button>
 
             {showSettingsDropdown && (
@@ -1296,18 +1296,19 @@ const DocumentEditor = () => {
           <div className="relative">
             <button 
               onClick={() => setShowShare(!showShare)}
-              className="flex items-center bg-blue-600 text-white hover:bg-blue-700 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm"
+              className="flex items-center bg-blue-600 text-white hover:bg-blue-700 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-sm"
             >
-              <Share2 size={15} className="mr-1.5" /> Share
+              <Share2 size={15} className="sm:mr-1.5" />
+              <span className="hidden sm:inline">Share</span>
             </button>
             
             {showShare && (
-              <div className={`absolute right-0 mt-2 w-96 rounded-2xl shadow-2xl border p-5 z-50 animate-in fade-in slide-in-from-top-2 ${
+              <div className={`absolute right-0 mt-2 w-[min(96vw,24rem)] rounded-2xl shadow-2xl border p-5 z-50 animate-in fade-in slide-in-from-top-2 ${
                 isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-100 text-gray-900'
               }`}>
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="font-bold text-base flex items-center">
-                    <Share2 size={18} className="mr-2 text-blue-500" /> Document Sharing & Permissions
+                    <Share2 size={18} className="mr-2 text-blue-500" /> Sharing & Permissions
                   </h3>
                   <button onClick={() => setShowShare(false)} className="text-gray-400 hover:text-gray-600">
                     <X size={18} />
@@ -1320,7 +1321,7 @@ const DocumentEditor = () => {
                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">
                       Invite Collaborator
                     </label>
-                    <div className="flex space-x-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input 
                         type="email" 
                         required 
@@ -1361,16 +1362,16 @@ const DocumentEditor = () => {
                   <div className="max-h-48 overflow-y-auto space-y-2.5">
                     {/* Owner Card */}
                     <div className="flex items-center justify-between p-2.5 bg-blue-500/10 rounded-xl border border-blue-500/20 text-xs">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center flex-shrink-0">
                           {documentInfo.Owner?.name?.charAt(0).toUpperCase()}
                         </div>
-                        <div>
-                          <div className="font-semibold">{documentInfo.Owner?.name}</div>
-                          <div className="text-[11px] text-gray-400">{documentInfo.Owner?.email}</div>
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{documentInfo.Owner?.name}</div>
+                          <div className="text-[11px] text-gray-400 truncate">{documentInfo.Owner?.email}</div>
                         </div>
                       </div>
-                      <span className="font-semibold text-blue-500 bg-blue-500/20 px-2 py-0.5 rounded-full text-[10px]">Owner</span>
+                      <span className="font-semibold text-blue-500 bg-blue-500/20 px-2 py-0.5 rounded-full text-[10px] flex-shrink-0 ml-2">Owner</span>
                     </div>
 
                     {/* Shared Collaborators */}
@@ -1381,17 +1382,17 @@ const DocumentEditor = () => {
                     ) : (
                       collaborators.map(c => (
                         <div key={c.id} className="flex items-center justify-between p-2.5 bg-gray-500/10 rounded-xl border border-gray-500/20 text-xs">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-7 h-7 rounded-full bg-gray-600 text-white font-bold flex items-center justify-center">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-gray-600 text-white font-bold flex items-center justify-center flex-shrink-0">
                               {c.User?.name?.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                              <div className="font-semibold">{c.User?.name}</div>
-                              <div className="text-[11px] text-gray-400">{c.User?.email}</div>
+                            <div className="min-w-0">
+                              <div className="font-semibold truncate">{c.User?.name}</div>
+                              <div className="text-[11px] text-gray-400 truncate">{c.User?.email}</div>
                             </div>
                           </div>
 
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
                             {getRoleBadge(c.role)}
                             {userRole === 'OWNER' && (
                               <button 
@@ -1417,7 +1418,7 @@ const DocumentEditor = () => {
       {/* Main Body */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Editor Area */}
-        <main className={`flex-1 overflow-auto p-4 sm:p-8 flex flex-col items-center print:p-0 ${
+        <main className={`flex-1 overflow-auto p-2 sm:p-4 md:p-8 flex flex-col items-center print:p-0 ${
           isDarkMode ? 'bg-gray-950' : 'bg-gray-100'
         }`}>
           {/* Permission Mode Banner */}
@@ -1435,28 +1436,27 @@ const DocumentEditor = () => {
             </div>
           )}
 
-          {/* Banner when viewing Revision Preview */}
           {previewVersion && (
-            <div className="w-full max-w-4xl bg-purple-900 text-white px-5 py-3 rounded-xl mb-4 shadow-lg flex justify-between items-center print:hidden">
+            <div className="w-full max-w-4xl bg-purple-900 text-white px-4 sm:px-5 py-3 rounded-xl mb-4 shadow-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 print:hidden">
               <div className="flex items-center space-x-3">
-                <Eye size={20} className="text-purple-300 animate-bounce" />
+                <Eye size={20} className="text-purple-300 animate-bounce flex-shrink-0" />
                 <div>
                   <h4 className="font-semibold text-sm">
-                    Previewing Historical Revision: "{previewVersion.versionName}"
+                    Previewing: "{previewVersion.versionName}"
                   </h4>
                   <p className="text-xs text-purple-200">
-                    Created by {previewVersion.Creator?.name || 'Unknown'} on {format(new Date(previewVersion.createdAt), 'MMM d, yyyy h:mm a')}
+                    By {previewVersion.Creator?.name || 'Unknown'} on {format(new Date(previewVersion.createdAt), 'MMM d, yyyy h:mm a')}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 self-end sm:self-auto">
                 {(userRole === 'OWNER' || userRole === 'EDITOR') && (
                   <button
                     onClick={() => handleRestoreVersion(previewVersion.id)}
                     disabled={restoringVersionId === previewVersion.id}
                     className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center transition-colors shadow-sm"
                   >
-                    <RotateCcw size={14} className="mr-1" /> Restore This Version
+                    <RotateCcw size={14} className="mr-1" /> Restore
                   </button>
                 )}
                 <button
@@ -1586,7 +1586,7 @@ const DocumentEditor = () => {
 
         {/* Presence Awareness Side Drawer */}
         {showPresenceDrawer && (
-          <aside className={`w-80 border-l shadow-xl flex flex-col z-30 animate-in slide-in-from-right duration-200 ${
+          <aside className={`w-full sm:w-80 border-l shadow-xl flex flex-col z-30 animate-in slide-in-from-right duration-200 absolute sm:relative inset-y-0 right-0 ${
             isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900'
           }`}>
             <div className="p-4 border-b border-gray-700/40 flex justify-between items-center">
@@ -1654,7 +1654,7 @@ const DocumentEditor = () => {
 
         {/* Comments Side Drawer */}
         {showCommentDrawer && (
-          <aside className={`w-96 border-l shadow-xl flex flex-col z-30 animate-in slide-in-from-right duration-200 ${
+          <aside className={`w-full sm:w-96 border-l shadow-xl flex flex-col z-30 animate-in slide-in-from-right duration-200 absolute sm:relative inset-y-0 right-0 ${
             isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900'
           }`}>
             <div className="p-4 border-b border-gray-700/40 flex justify-between items-center">
@@ -1877,7 +1877,7 @@ const DocumentEditor = () => {
 
         {/* Version History Side Drawer */}
         {showVersionDrawer && (
-          <aside className={`w-96 border-l shadow-xl flex flex-col z-30 animate-in slide-in-from-right duration-200 ${
+          <aside className={`w-full sm:w-96 border-l shadow-xl flex flex-col z-30 animate-in slide-in-from-right duration-200 absolute sm:relative inset-y-0 right-0 ${
             isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-900'
           }`}>
             <div className="p-4 border-b border-gray-700/40 flex justify-between items-center">
@@ -2027,9 +2027,15 @@ const DocumentEditor = () => {
           border: none !important;
         }
         .ql-editor {
-          padding: 40px 60px !important;
-          min-height: 800px;
+          padding: 20px 16px !important;
+          min-height: 600px;
           color: ${isDarkMode ? '#f8fafc' : '#0f172a'};
+        }
+        @media (min-width: 640px) {
+          .ql-editor {
+            padding: 40px 60px !important;
+            min-height: 800px;
+          }
         }
         .ql-cursor-flag {
           border-radius: 4px;
