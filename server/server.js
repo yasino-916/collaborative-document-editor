@@ -5,7 +5,7 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { sequelize, User, Document, Collaborator, DocumentVersion, Comment } = require('./db');
+const { sequelize, Op, User, Document, Collaborator, DocumentVersion, Comment, Invitation } = require('./db');
 
 const app = express();
 const server = http.createServer(app);
@@ -365,6 +365,173 @@ app.post('/api/documents/:id/share', authMiddleware, async (req, res) => {
     });
 
     res.json({ message: `Shared successfully with ${userToShare.name} as ${targetRole}`, collab });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Invitation Routes ─────────────────────────────────────────────────────────
+
+// POST /api/documents/:id/invite  — send an invitation (creates a PENDING record)
+app.post('/api/documents/:id/invite', authMiddleware, async (req, res) => {
+  try {
+    const { email, role, message } = req.body;
+    const { document, role: userRole } = await getDocRole(req.params.id, req.user.id);
+    if (!document || (userRole !== 'OWNER' && userRole !== 'EDITOR'))
+      return res.status(403).json({ error: 'Only owner or editor can send invitations.' });
+
+    const validRoles = ['VIEWER', 'COMMENTER', 'EDITOR'];
+    const targetRole = validRoles.includes(role) ? role : 'EDITOR';
+
+    const invitee = await User.findOne({ where: { email } });
+    if (!invitee) return res.status(404).json({ error: 'No user found with that email address.' });
+    if (invitee.id === document.ownerId)
+      return res.status(400).json({ error: 'Cannot invite the document owner.' });
+
+    // If already a collaborator, just update role instead
+    const existingCollab = await Collaborator.findOne({
+      where: { documentId: document.id, userId: invitee.id }
+    });
+    if (existingCollab) {
+      existingCollab.role = targetRole;
+      await existingCollab.save();
+      io.emit('documentShared', {
+        userId: invitee.id,
+        document: { id: document.id, title: document.title, Owner: { name: req.user.name, email: req.user.email } },
+        sharedBy: req.user.name,
+        role: targetRole,
+        isNewShare: false
+      });
+      return res.json({ message: `${invitee.name} is already a collaborator. Role updated to ${targetRole}.` });
+    }
+
+    // Cancel any existing PENDING invite for same doc+invitee
+    await Invitation.destroy({
+      where: { documentId: document.id, inviteeId: invitee.id, status: 'PENDING' }
+    });
+
+    const invitation = await Invitation.create({
+      documentId: document.id,
+      inviterId: req.user.id,
+      inviteeId: invitee.id,
+      role: targetRole,
+      status: 'PENDING',
+      message: message || null
+    });
+
+    const fullInvitation = await Invitation.findByPk(invitation.id, {
+      include: [
+        { model: User, as: 'Inviter', attributes: ['id', 'name', 'email'] },
+        { model: User, as: 'Invitee', attributes: ['id', 'name', 'email'] },
+        { model: Document, attributes: ['id', 'title'] }
+      ]
+    });
+
+    // Notify the invitee in real-time
+    io.emit('invitation-received', {
+      userId: invitee.id,
+      invitation: fullInvitation
+    });
+
+    res.json({ message: `Invitation sent to ${invitee.name}.`, invitation: fullInvitation });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/invitations  — get all pending invitations for the logged-in user
+app.get('/api/invitations', authMiddleware, async (req, res) => {
+  try {
+    const invitations = await Invitation.findAll({
+      where: { inviteeId: req.user.id, status: 'PENDING' },
+      include: [
+        { model: User, as: 'Inviter', attributes: ['id', 'name', 'email'] },
+        { model: Document, attributes: ['id', 'title'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(invitations);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/invitations/count  — fast unread count for the bell badge
+app.get('/api/invitations/count', authMiddleware, async (req, res) => {
+  try {
+    const count = await Invitation.count({
+      where: { inviteeId: req.user.id, status: 'PENDING' }
+    });
+    res.json({ count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/invitations/:id/respond  — accept or reject
+app.put('/api/invitations/:id/respond', authMiddleware, async (req, res) => {
+  try {
+    const { action } = req.body; // 'ACCEPTED' | 'REJECTED'
+    if (!['ACCEPTED', 'REJECTED'].includes(action))
+      return res.status(400).json({ error: 'action must be ACCEPTED or REJECTED' });
+
+    const invitation = await Invitation.findByPk(req.params.id, {
+      include: [
+        { model: User, as: 'Inviter', attributes: ['id', 'name', 'email'] },
+        { model: Document, attributes: ['id', 'title'] }
+      ]
+    });
+
+    if (!invitation) return res.status(404).json({ error: 'Invitation not found.' });
+    if (invitation.inviteeId !== req.user.id)
+      return res.status(403).json({ error: 'This invitation is not for you.' });
+    if (invitation.status !== 'PENDING')
+      return res.status(400).json({ error: 'Invitation has already been responded to.' });
+
+    invitation.status = action;
+    await invitation.save();
+
+    if (action === 'ACCEPTED') {
+      // Add as collaborator
+      const [collab] = await Collaborator.findOrCreate({
+        where: { documentId: invitation.documentId, userId: req.user.id },
+        defaults: { role: invitation.role }
+      });
+      if (collab.role !== invitation.role) {
+        collab.role = invitation.role;
+        await collab.save();
+      }
+
+      // Notify inviter that the invitation was accepted
+      io.emit('invitation-responded', {
+        userId: invitation.inviterId,
+        inviteeName: req.user.name,
+        documentTitle: invitation.Document.title,
+        documentId: invitation.documentId,
+        action: 'ACCEPTED',
+        role: invitation.role
+      });
+
+      // Also emit documentShared so Dashboard refreshes doc list
+      io.emit('documentShared', {
+        userId: req.user.id,
+        document: { id: invitation.Document.id, title: invitation.Document.title },
+        sharedBy: invitation.Inviter.name,
+        role: invitation.role,
+        isNewShare: true
+      });
+    } else {
+      // Notify inviter of the rejection
+      io.emit('invitation-responded', {
+        userId: invitation.inviterId,
+        inviteeName: req.user.name,
+        documentTitle: invitation.Document.title,
+        documentId: invitation.documentId,
+        action: 'REJECTED'
+      });
+    }
+
+    res.json({ message: `Invitation ${action.toLowerCase()}.`, invitation });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -802,6 +969,27 @@ io.on('connection', (socket) => {
         if (role !== 'OWNER' && role !== 'EDITOR') return;
 
         await Document.update({ content: data }, { where: { id: documentId } });
+
+        // Notify all collaborators (not the editor themselves) that the document was changed
+        const collabs = await Collaborator.findAll({ where: { documentId } });
+        const changePayload = {
+          documentId,
+          documentTitle: document.title,
+          changedBy: { id: user.id, name: user.name },
+          changedAt: new Date().toISOString()
+        };
+
+        // Emit to every collaborator's personal channel
+        collabs.forEach(c => {
+          if (c.userId !== user.id) {
+            io.emit('document-changed', { userId: c.userId, ...changePayload });
+          }
+        });
+
+        // Also notify the owner if someone else is editing
+        if (document.ownerId !== user.id) {
+          io.emit('document-changed', { userId: document.ownerId, ...changePayload });
+        }
 
         const now = Date.now();
         const lastSaved = lastVersionSaved.get(documentId) || 0;
