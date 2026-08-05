@@ -90,7 +90,7 @@ const Login = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
           {/* Email */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Email Address</label>
@@ -101,6 +101,7 @@ const Login = () => {
               <input
                 type="email"
                 required
+                autoComplete="off"
                 className="pl-10 w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all"
                 placeholder="you@example.com"
                 value={email}
@@ -119,6 +120,7 @@ const Login = () => {
               <input
                 type="password"
                 required
+                autoComplete="new-password"
                 className="pl-10 w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all"
                 placeholder="••••••••"
                 value={password}
