@@ -703,17 +703,25 @@ const DocumentEditor = () => {
     }
   };
 
-  // Share handler
+  // Share / Invite state
+  const [shareMessage, setShareMessage] = useState('');
+
+  // Share handler — calls /invite so new shares require acceptance
   const handleShare = async (e) => {
     e.preventDefault();
     try {
-      const res = await api.post(`/documents/${documentId}/share`, { email: shareEmail, role: shareRole });
-      addNotification('success', res.data.message || `Shared with ${shareEmail} as ${shareRole}!`);
+      const res = await api.post(`/documents/${documentId}/invite`, {
+        email: shareEmail,
+        role: shareRole,
+        message: shareMessage.trim() || undefined
+      });
+      addNotification('success', res.data.message || `Invitation sent to ${shareEmail}!`);
       setShareEmail('');
       setShareRole('EDITOR');
+      setShareMessage('');
       fetchCollaborators();
     } catch (err) {
-      const errorMsg = err.response?.data?.error || 'Failed to share document';
+      const errorMsg = err.response?.data?.error || 'Failed to send invitation';
       addNotification('warning', errorMsg);
     }
   };
@@ -1319,13 +1327,13 @@ const DocumentEditor = () => {
                 {(userRole === 'OWNER' || userRole === 'EDITOR') ? (
                   <form onSubmit={handleShare} className="mb-5 space-y-3 pb-4 border-b border-gray-700/50">
                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                      Invite Collaborator
+                      Send Invitation
                     </label>
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <input 
-                        type="email" 
-                        required 
-                        placeholder="User's email address..." 
+                      <input
+                        type="email"
+                        required
+                        placeholder="User's email address..."
                         className={`flex-1 p-2 border rounded-lg text-xs outline-none ${
                           isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
                         }`}
@@ -1344,8 +1352,20 @@ const DocumentEditor = () => {
                         <option value="VIEWER">Viewer</option>
                       </select>
                     </div>
-                    <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors shadow-sm">
-                      Send Invitation / Update Permission
+                    <input
+                      type="text"
+                      placeholder="Optional message to invitee..."
+                      className={`w-full p-2 border rounded-lg text-xs outline-none ${
+                        isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' : 'bg-white border-gray-300'
+                      }`}
+                      value={shareMessage}
+                      onChange={e => setShareMessage(e.target.value)}
+                    />
+                    <p className={`text-[11px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      The user will receive an invitation and must accept before getting access.
+                    </p>
+                    <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center gap-2">
+                      <Share2 size={13} /> Send Invitation
                     </button>
                   </form>
                 ) : (
