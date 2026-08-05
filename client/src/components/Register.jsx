@@ -73,7 +73,7 @@ const Register = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
           {/* Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Full Name</label>
@@ -84,6 +84,7 @@ const Register = () => {
               <input
                 type="text"
                 required
+                autoComplete="off"
                 className="pl-10 w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all"
                 placeholder="John Doe"
                 value={name}
@@ -102,6 +103,7 @@ const Register = () => {
               <input
                 type="email"
                 required
+                autoComplete="off"
                 className="pl-10 w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all"
                 placeholder="you@example.com"
                 value={email}
@@ -120,6 +122,7 @@ const Register = () => {
               <input
                 type="password"
                 required
+                autoComplete="new-password"
                 className="pl-10 w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all"
                 placeholder="••••••••"
                 value={password}
