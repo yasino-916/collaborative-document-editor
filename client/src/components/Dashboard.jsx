@@ -14,7 +14,7 @@ const Dashboard = () => {
   const { user, api, logout } = useAuth();
   const [ownedDocs, setOwnedDocs] = useState([]);
   const [sharedDocs, setSharedDocs] = useState([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState('docs');
   const navigate = useNavigate();
   const profileMenuRef = useRef(null);
@@ -331,17 +331,17 @@ const Dashboard = () => {
     const iconColorClass = isSheet ? 'text-green-600 bg-green-50' : isPresentation ? 'text-yellow-600 bg-yellow-50' : 'text-blue-600 bg-indigo-50';
 
     return (
-    <div key={doc.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-5">
+    <div key={doc.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-4 sm:p-5">
       <Link to={docLink} className="block">
-        <div className="flex items-center mb-4">
-          <div className={`p-3 rounded-lg mr-4 ${iconColorClass}`}>
-            <Icon size={24} />
+        <div className="flex items-start mb-4">
+          <div className={`p-2 sm:p-3 rounded-lg mr-3 flex-shrink-0 ${iconColorClass}`}>
+            <Icon size={20} />
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900 line-clamp-1">{doc.title}</h3>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-semibold text-gray-900 line-clamp-1 text-sm sm:text-base">{doc.title}</h3>
               {isOwner && doc.hasCollaborators && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
                   <Users size={12} className="mr-1" />
                   Shared
                 </span>
@@ -362,8 +362,8 @@ const Dashboard = () => {
         </div>
       </Link>
       <div className="border-t border-gray-100 pt-3 flex justify-between items-center text-sm text-gray-500">
-        <span>By {doc.Owner?.name || 'Unknown'}</span>
-        <div className="flex space-x-1">
+        <span className="truncate mr-2 text-xs sm:text-sm">By {doc.Owner?.name || 'Unknown'}</span>
+        <div className="flex space-x-1 flex-shrink-0">
           {isOwner && (
             <button onClick={() => renameDoc(doc)} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-md transition-colors" title="Rename">
               <Edit2 size={16} />
@@ -395,8 +395,21 @@ const Dashboard = () => {
           </button>
         </div>
       )}
-      {/* Sidebar - Google Docs Style */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-0'} bg-white border-r border-gray-200 transition-all duration-300 ease-in-out overflow-hidden flex flex-col`}>
+      {/* Sidebar overlay backdrop (mobile only) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - fixed overlay on mobile, inline on desktop */}
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-30
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${sidebarOpen ? 'lg:w-64' : 'lg:w-0'}
+        w-64 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out overflow-hidden flex flex-col
+      `}>
         {/* Logo/Header */}
         <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -497,20 +510,18 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="bg-white shadow-sm sticky top-0 z-10 border-b border-gray-200">
-          <div className="px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              {!sidebarOpen && (
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-                  title="Open sidebar"
-                >
-                  <Menu size={24} />
-                </button>
-              )}
-              <h2 className="text-xl font-semibold text-gray-900">
+          <div className="px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center gap-3">
+            <div className="flex items-center space-x-3 min-w-0">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
+                title="Toggle sidebar"
+              >
+                <Menu size={22} />
+              </button>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 {activeView === 'docs' && 'My Documents'}
                 {activeView === 'sheets' && 'Sheets'}
                 {activeView === 'slides' && 'Slides'}
@@ -521,7 +532,7 @@ const Dashboard = () => {
                 {activeView === 'drive' && 'Drive'}
               </h2>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
               <button
                 onClick={fetchDocs}
                 className="flex items-center text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-lg hover:bg-gray-100"
@@ -531,9 +542,10 @@ const Dashboard = () => {
               </button>
               <button
                 onClick={createDoc}
-                className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-sm transition-all"
+                className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg shadow-sm transition-all"
               >
-                <Plus size={20} className="mr-2" /> New Document
+                <Plus size={20} className="sm:mr-2" />
+                <span className="hidden sm:inline">New Document</span>
               </button>
 
               {/* Profile Button + Dropdown */}
@@ -547,7 +559,7 @@ const Dashboard = () => {
                 </button>
 
                 {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                  <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
                     {/* User info header */}
                     <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center space-x-3">
                       <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-base flex-shrink-0">
@@ -646,7 +658,7 @@ const Dashboard = () => {
             <div>
               {/* Template Gallery */}
               <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">Start a new spreadsheet</h3>
                   <button className="text-sm text-gray-600 hover:text-gray-900 flex items-center">
                     Template gallery
@@ -757,9 +769,9 @@ const Dashboard = () => {
 
               {/* Recent Spreadsheets Section */}
               <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">Recent spreadsheets</h3>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center flex-wrap gap-2">
                     <select className="text-sm text-gray-600 border-none bg-transparent cursor-pointer">
                       <option>Owned by anyone</option>
                       <option>Owned by me</option>
@@ -805,7 +817,7 @@ const Dashboard = () => {
             <div>
               {/* Template Gallery */}
               <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">Start a new presentation</h3>
                   <button className="text-sm text-gray-600 hover:text-gray-900 flex items-center">
                     Template gallery
@@ -895,9 +907,9 @@ const Dashboard = () => {
 
               {/* Recent Presentations */}
               <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">Recent presentations</h3>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center flex-wrap gap-2">
                     <select className="text-sm text-gray-600 border-none bg-transparent cursor-pointer">
                       <option>Owned by anyone</option>
                       <option>Owned by me</option>
@@ -922,7 +934,7 @@ const Dashboard = () => {
             <div>
               {/* Action Buttons */}
               <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">Start a new video</h3>
                 </div>
 
@@ -958,9 +970,9 @@ const Dashboard = () => {
 
               {/* Recent Videos */}
               <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">Recent videos</h3>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center flex-wrap gap-2">
                     <select className="text-sm text-gray-600 border-none bg-transparent cursor-pointer">
                       <option>All videos</option>
                       <option>My videos</option>
@@ -982,7 +994,7 @@ const Dashboard = () => {
             <div>
               {/* Template Gallery */}
               <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">Start a new form</h3>
                   <button className="text-sm text-gray-600 hover:text-gray-900 flex items-center">
                     Template gallery
@@ -1074,9 +1086,9 @@ const Dashboard = () => {
 
               {/* Recent Forms */}
               <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">Recent forms</h3>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center flex-wrap gap-2">
                     <select className="text-sm text-gray-600 border-none bg-transparent cursor-pointer">
                       <option>Owned by anyone</option>
                       <option>Owned by me</option>
@@ -1098,19 +1110,19 @@ const Dashboard = () => {
 
           {/* Settings View */}
           {activeView === 'settings' && (
-            <div className="max-w-3xl">
+            <div className="max-w-3xl w-full">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 {/* Profile Section */}
                 <div className="p-8 border-b border-gray-200">
                   <div className="mb-6">
                     <label className="block text-sm text-gray-600 mb-2">Name</label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <input
                         type="text"
                         value={editingName ? nameValue : user.name}
                         onChange={(e) => setNameValue(e.target.value)}
                         disabled={!editingName}
-                        className={`flex-1 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingName ? 'bg-white' : 'bg-gray-50'
+                        className={`flex-1 min-w-0 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingName ? 'bg-white' : 'bg-gray-50'
                           }`}
                       />
                       {editingName ? (
@@ -1143,13 +1155,13 @@ const Dashboard = () => {
                   </div>
                   <div>
                     <label className="block text-sm text-gray-600 mb-2">Email</label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <input
                         type="email"
                         value={editingEmail ? emailValue : user.email}
                         onChange={(e) => setEmailValue(e.target.value)}
                         disabled={!editingEmail}
-                        className={`flex-1 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingEmail ? 'bg-white' : 'bg-gray-50'
+                        className={`flex-1 min-w-0 px-4 py-2.5 border border-gray-300 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editingEmail ? 'bg-white' : 'bg-gray-50'
                           }`}
                       />
                       {editingEmail ? (
@@ -1254,7 +1266,7 @@ const Dashboard = () => {
                   <h3 className="text-base font-normal text-gray-900 mb-4">Account Actions</h3>
                   <div className="space-y-3">
                     <button
-                      onClick={handleChangePassword}
+                      onClick={() => { resetChangePassword(); setShowChangePassword(true); }}
                       className="text-sm text-blue-600 hover:underline font-normal block"
                     >
                       Change password
@@ -1388,9 +1400,9 @@ const Dashboard = () => {
 
               {/* All Files */}
               <div>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
                   <h3 className="text-lg font-normal text-gray-700">My Drive</h3>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center flex-wrap gap-2">
                     <select className="text-sm text-gray-600 border-none bg-transparent cursor-pointer">
                       <option>Name</option>
                       <option>Last modified</option>
@@ -1401,30 +1413,30 @@ const Dashboard = () => {
 
                 {/* Combined files view */}
                 {[...ownedDocs, ...sharedDocs].length > 0 ? (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                    <table className="w-full">
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+                    <table className="w-full min-w-[500px]">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modified</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
+                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Owner</th>
+                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modified</th>
+                          <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Size</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {[...ownedDocs, ...sharedDocs].slice(0, 10).map(doc => (
                           <tr key={doc.id} className="hover:bg-gray-50 cursor-pointer">
-                            <td className="px-6 py-4">
+                            <td className="px-4 sm:px-6 py-4">
                               <div className="flex items-center">
-                                <FileText size={20} className="text-blue-500 mr-3" />
-                                <span className="text-sm font-medium text-gray-900">{doc.title}</span>
+                                <FileText size={20} className="text-blue-500 mr-3 flex-shrink-0" />
+                                <span className="text-sm font-medium text-gray-900 truncate max-w-[120px] sm:max-w-none">{doc.title}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{doc.Owner?.name || 'Unknown'}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
+                            <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 hidden sm:table-cell">{doc.Owner?.name || 'Unknown'}</td>
+                            <td className="px-4 sm:px-6 py-4 text-sm text-gray-600">
                               {format(new Date(doc.updatedAt), 'MMM d, yyyy')}
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">—</td>
+                            <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 hidden md:table-cell">—</td>
                           </tr>
                         ))}
                       </tbody>
