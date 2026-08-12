@@ -206,8 +206,8 @@ Insa_challenge3/
 │
 ├── README.md                   # This file
 ├── API_DOCUMENTATION.md        # API reference
-├── DATABASE_SCHEMA.md          # Database structure
-└── SUBMISSION_CHECKLIST.md     # Submission guide
+ ── DATABASE_SCHEMA.md          # Database structure
+
 ```
 
 ---
