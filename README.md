@@ -61,9 +61,6 @@ cd client && npm install --legacy-peer-deps && npm run dev
    ```bash
    npm start
    ```
-   *✅ Server will start on port 3001 and automatically create `database.sqlite` file.*
-   
-   **⚠️ Note**: First PDF export downloads Chrome (~170MB, one-time only).
 
 ### Frontend Setup (Terminal 2)
 1. Navigate to the client directory:
